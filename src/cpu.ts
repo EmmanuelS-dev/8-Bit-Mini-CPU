@@ -11,24 +11,20 @@ export type CpuState = {
   cycles: number
   memory: number[]
   activePaths: string[]
+  activeSignals: string[]
+  aluResult: number
   lastEvent: string
   instructionName: string
+  cycleLog: CycleRecord[]
 }
 
-export type ManualSignals = {
-  pcIncrement: boolean
-  marFromPc: boolean
-  marFromOperand: boolean
-  marFromInput: boolean
-  ramRead: boolean
-  ramWrite: boolean
-  mdrLoad: boolean
-  irLoad: boolean
-  loadA: boolean
-  loadB: boolean
-  aFromAlu: boolean
-  aluSubtract: boolean
-  reset: boolean
+export type CycleRecord = {
+  id: number
+  cycle: number
+  mode: 'Manual' | 'Automatic' | 'Input'
+  summary: string
+  paths: string[]
+  signals?: string[]
 }
 
 export const instructionSet = [
@@ -59,8 +55,8 @@ export function initialCpuState(): CpuState {
   return {
     pc: 0, mar: 0, mdr: 0, ir: 0, a: 0, b: 0,
     zero: false, carry: false, halted: false, cycles: 0,
-    memory, activePaths: [], lastEvent: 'Ready. Load a program or begin with the sample.',
-    instructionName: '—',
+    memory, activePaths: [], activeSignals: [], aluResult: 0,
+    lastEvent: 'Ready. Load a program or begin with the sample.', instructionName: '—', cycleLog: [],
   }
 }
 
@@ -68,7 +64,7 @@ const byte = (value: number) => value & 0xff
 const hex = (value: number, digits = 2) => value.toString(16).toUpperCase().padStart(digits, '0')
 
 export function resetCpu(state: CpuState): CpuState {
-  return { ...initialCpuState(), memory: [...state.memory], lastEvent: 'Reset complete. Memory contents were preserved.' }
+  return { ...initialCpuState(), memory: [...state.memory], cycleLog: state.cycleLog, lastEvent: 'Reset complete. Memory contents were preserved.' }
 }
 
 export function runInstruction(state: CpuState): CpuState {
@@ -84,6 +80,7 @@ export function runInstruction(state: CpuState): CpuState {
   next.ir = instruction
   next.pc = byte(next.pc + 1)
   next.instructionName = definition.mnemonic
+  next.activeSignals = ['PC_OUT', 'MAR_IN', 'MEM_READ', 'PC_INCREMENT', 'WMFC', 'MDR_IN', 'IR_IN', 'DECODE']
   next.activePaths = ['pc-mar', 'mar-ram', 'ram-mdr', 'mdr-ir']
   next.lastEvent = `Fetched ${hex(instruction)} at ${hex(address)}: ${definition.mnemonic}${opcode === 0 || opcode === 0xf ? '' : ` ${hex(operand, 1)}`}.`
 
@@ -107,6 +104,7 @@ export function runInstruction(state: CpuState): CpuState {
       break
     case 0x3: {
       const result = next.a + next.b
+      next.aluResult = byte(result)
       next.a = byte(result)
       next.carry = result > 0xff
       next.zero = next.a === 0
@@ -116,6 +114,7 @@ export function runInstruction(state: CpuState): CpuState {
     }
     case 0x4:
       next.carry = next.a >= next.b
+      next.aluResult = byte(next.a - next.b)
       next.a = byte(next.a - next.b)
       next.zero = next.a === 0
       next.activePaths.push('a-alu', 'b-alu', 'alu-a')
@@ -156,6 +155,7 @@ export function runInstruction(state: CpuState): CpuState {
     case 0xb:
     case 0xc: {
       const result = opcode === 0xa ? next.a & next.b : opcode === 0xb ? next.a | next.b : next.a ^ next.b
+      next.aluResult = byte(result)
       next.a = byte(result)
       next.zero = next.a === 0
       next.carry = false
@@ -164,13 +164,15 @@ export function runInstruction(state: CpuState): CpuState {
       break
     }
     case 0xd:
+      next.aluResult = byte(~next.a)
       next.a = byte(~next.a)
       next.zero = next.a === 0
       next.activePaths.push('a-alu', 'alu-a')
       next.lastEvent += ` ALU result ${hex(next.a)}.`
       break
     case 0xe:
-      next.zero = byte(next.a - next.b) === 0
+      next.aluResult = byte(next.a - next.b)
+      next.zero = next.aluResult === 0
       next.carry = next.a >= next.b
       next.activePaths.push('a-alu', 'b-alu', 'alu-flags')
       next.lastEvent += ` Compare complete; zero flag ${next.zero ? 'set' : 'clear'}.`
@@ -181,32 +183,14 @@ export function runInstruction(state: CpuState): CpuState {
       next.lastEvent += ' CPU halted.'
       break
   }
-  return next
-}
-
-export function applyManualSignals(
-  state: CpuState,
-  signals: ManualSignals,
-  values: { dataA: number; dataB: number; operand: number; ramAddress: number; memoryValue: number },
-): CpuState {
-  if (signals.reset) return resetCpu(state)
-  const next = { ...state, memory: [...state.memory], cycles: state.cycles + 1, activePaths: [] as string[] }
-  const operand = values.operand & 0x0f
-  const dataA = byte(values.dataA)
-  const dataB = byte(values.dataB)
-  const address = byte(values.ramAddress)
-  const paths = next.activePaths
-  if (signals.marFromPc) { next.mar = next.pc; paths.push('pc-mar') }
-  if (signals.marFromOperand) { next.mar = operand; paths.push('operand-mar') }
-  if (signals.marFromInput) { next.mar = address; paths.push('input-mar') }
-  if (signals.ramRead) { next.mdr = next.memory[next.mar]; paths.push('mar-ram', 'ram-mdr') }
-  if (signals.ramWrite) { next.memory[next.mar] = byte(values.memoryValue); paths.push('mdr-ram') }
-  if (signals.mdrLoad) { next.mdr = byte(values.memoryValue); paths.push('input-mdr') }
-  if (signals.irLoad) { next.ir = next.mdr; paths.push('mdr-ir') }
-  if (signals.loadA) { next.a = signals.aFromAlu ? (signals.aluSubtract ? byte(next.a - dataB) : byte(next.a + dataB)) : dataA; next.zero = next.a === 0; paths.push(signals.aFromAlu ? 'a-alu' : 'input-a', ...(signals.aFromAlu ? ['b-alu', 'alu-a'] : [])) }
-  if (signals.loadB) { next.b = dataB; paths.push('input-b') }
-  if (signals.pcIncrement) { next.pc = byte(next.pc + 1); paths.push('pc-increment') }
-  next.lastEvent = paths.length ? `Manual clock edge ${next.cycles}: ${paths.length} datapath signal${paths.length === 1 ? '' : 's'} applied.` : `Manual clock edge ${next.cycles}: no control signals asserted.`
+  next.cycleLog = [...state.cycleLog, {
+    id: state.cycleLog.length + 1,
+    cycle: next.cycles,
+    mode: 'Automatic' as const,
+    summary: next.lastEvent,
+    paths: [...next.activePaths],
+    signals: [...next.activeSignals],
+  }].slice(-100)
   return next
 }
 
@@ -219,7 +203,11 @@ export function installProgram(state: CpuState, source: string): CpuState {
   }
   const memory = Array(256).fill(0) as number[]
   values.slice(0, 256).forEach((value, index) => { memory[index] = value })
-  return { ...initialCpuState(), memory, lastEvent: `${Math.min(values.length, 256)} byte${values.length === 1 ? '' : 's'} loaded at address 00.` }
+  const summary = `${Math.min(values.length, 256)} byte${values.length === 1 ? '' : 's'} loaded at address 00.`
+  return {
+    ...initialCpuState(), memory, lastEvent: summary,
+    cycleLog: [...state.cycleLog, { id: state.cycleLog.length + 1, cycle: 0, mode: 'Input' as const, summary, paths: [] }].slice(-100),
+  }
 }
 
 export function hexByte(value: number) { return hex(value) }
