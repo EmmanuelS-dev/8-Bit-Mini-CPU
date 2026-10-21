@@ -79,7 +79,7 @@ function CpuDiagram({ state }: { state: CpuState }) {
   const destinationText = state.destination ? (state.destination.kind === 'RAM' ? `RAM[${formatByte(state.destination.address ?? 0)}]` : state.destination.kind === 'OUT' ? 'OUT' : state.destination.kind) : '—'
   const taps = [172, 263, 410, 415, 555, 600, 630, 660, 735, 740, 775, 825, 875, 908]
 
-  return <div className="diagram-pan" tabIndex={0} aria-label="Scrollable single-bus CPU diagram">
+  return <><div className="diagram-pan" tabIndex={0} aria-label="Scrollable single-bus CPU diagram">
     <svg className="cpu-diagram" viewBox="0 0 1840 1080" role="img" aria-label={`Single internal bus CPU. PC ${formatByte(state.pc)}, IR ${formatByte(state.ir)}, A ${formatByte(state.a)}, B ${formatByte(state.b)}, MAR ${formatByte(state.mar)}, MDR ${formatByte(state.mdr)}, output ${formatByte(state.output)}, Zero ${Number(state.zero)}, Negative ${Number(state.negative)}, Carry ${Number(state.carry)}, cycles ${state.cycles}. External RAM address, data, and control lines are separate.`}>
       {/* Draw all routed wires before the cards so a route never runs over component text. */}
       <path className="internal-bus" d={`M${busX} 80 V1010`} />
@@ -89,7 +89,6 @@ function CpuDiagram({ state }: { state: CpuState }) {
       <text className="wire-label address-label external-port-label" x="455" y="397" textAnchor="middle">ADDRESS</text>
       <text className="wire-label data-label external-port-label" x="455" y="542" textAnchor="middle">DATA</text>
       <text className="wire-label control-label" x="430" y="648">READ / WRITE / WMFC</text>
-      <text className="wire-label control-label external-control-caption" x="920" y="1018" textAnchor="middle">EXTERNAL MEMORY CONTROL · READ / WRITE / WMFC</text>
       <text className="wire-label control-label" x="1195" y="680" textAnchor="middle">FLAG UPDATE</text>
 
       <path className="control-rail" d={paths['cu-control']} />
@@ -172,7 +171,7 @@ function CpuDiagram({ state }: { state: CpuState }) {
         <text className="cpu-component-caption" x="1470" y="684">Zero · Negative · Carry</text>
       </g>
     </svg>
-  </div>
+  </div><p className="external-control-caption">EXTERNAL MEMORY CONTROL · READ / WRITE / WMFC</p></>
 }
 
 function SourceFields({ label, value, onChange }: { label: string; value: { kind: SourceKind; address: number | null }; onChange: (value: { kind: SourceKind; address: number | null }) => void }) {

@@ -700,6 +700,7 @@ body { background: #101116; color: var(--text); }
 .wire-label { fill: #bac5cf; font: 17px 'DM Mono', monospace; letter-spacing: .035em; }
 .internal-label { fill: #dce5e7; font-size: 19px; }
 .bus-caption { fill: #9caab5; font-size: 16px; }
+.external-control-caption { margin: 5px 0 0; color: #e7b98b; text-align: center; font: 13px 'DM Mono', monospace; }
 .address-label { fill: #d8b083; }
 .data-label { fill: #9dded4; }
 .control-label { fill: #e7b98b; }
