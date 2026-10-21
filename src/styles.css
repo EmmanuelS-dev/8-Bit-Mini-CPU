@@ -647,3 +647,209 @@ body { background: #101116; color: var(--text); }
   .data-route.route-active { animation-duration: .01ms; }
   .external-bus.control-active, .decode-wire.signal-active, .flag-route.signal-active { animation: none; }
 }
+
+/* Manual single-bus circuit and instruction builder */
+.simulator-frame {
+  isolation: isolate;
+  width: 100%;
+  max-width: none;
+  padding: 0 clamp(14px, 2.3vw, 38px) 36px;
+  background: #0d1015;
+}
+.simulator-light-tunnel {
+  position: fixed !important;
+  z-index: 0;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  background: #0d1015;
+  opacity: .34;
+  pointer-events: none;
+}
+.simulator-light-tunnel .light-tunnel-canvas { display: block; width: 100%; height: 100%; opacity: .5; }
+.simulator-frame > :not(.simulator-light-tunnel) { position: relative; z-index: 1; }
+.simulator-frame .topbar { position: sticky; top: 0; z-index: 20; margin-inline: calc(-1 * clamp(14px, 2.3vw, 38px)); padding-inline: clamp(14px, 2.3vw, 38px); background: rgba(13, 16, 21, .94); backdrop-filter: blur(16px); }
+.simulator-frame .site-footer { background: rgba(13, 16, 21, .82); }
+.simulator-page { width: 100%; max-width: none; margin: 0 auto; }
+.circuit-section { padding-top: clamp(18px, 2vw, 34px); scroll-margin-top: 92px; }
+.circuit-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 28px; margin-bottom: 16px; }
+.circuit-heading h1 { margin: 0; color: #f2f2f1; font-size: clamp(34px, 4vw, 56px); line-height: 1.05; }
+.circuit-heading p:not(.eyebrow) { max-width: 860px; color: #c5cbd2; font-size: 19px; line-height: 1.5; margin: 10px 0 0; }
+.circuit-status { display: grid; grid-template-columns: 14px auto; align-items: center; gap: 7px 10px; min-width: 185px; padding: 12px 15px; border: 1px solid #36454b; border-radius: 10px; color: #9ae0d5; background: rgba(18, 30, 32, .87); font: 13px 'DM Mono', monospace; letter-spacing: .09em; }
+.circuit-status strong { grid-column: 2; color: #f0c091; font-size: 17px; letter-spacing: .02em; }
+.status-indicator { grid-row: 1; width: 9px; height: 9px; border-radius: 50%; background: #8de1d1; box-shadow: 0 0 10px #8de1d199; }
+.status-indicator.halted { background: #ed9c85; box-shadow: 0 0 10px #ed9c8599; }
+.simulator-frame .circuit-panel, .simulator-frame .instruction-config-panel, .simulator-frame .ram-initial-panel, .simulator-frame .loaded-program-panel, .simulator-frame .trace-panel {
+  border: 1px solid rgba(102, 115, 128, .45);
+  border-radius: 15px;
+  background: rgba(19, 23, 30, .91);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .16);
+}
+.circuit-panel { padding: clamp(14px, 1.5vw, 24px); }
+.diagram-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 18px; padding: 0 4px 10px; }
+.diagram-heading h2 { margin: 0; color: #f2f0ed; font-size: clamp(22px, 2vw, 30px); }
+.diagram-heading p { margin: 6px 0 0; color: #b9c1c9; font-size: 16px; }
+.bus-legend { display: flex; align-items: center; gap: 9px; color: #a9e5db; white-space: nowrap; font: 13px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .06em; }
+.bus-legend i { width: 22px; height: 3px; background: #96e7dd; box-shadow: 0 0 8px #96e7dd77; }
+.diagram-pan { width: 100%; overflow: auto; overscroll-behavior: contain; scrollbar-color: #59616d #171b22; scrollbar-width: thin; border-radius: 10px; }
+.diagram-pan:focus-visible { outline: 2px solid #a6e7dc; outline-offset: 3px; }
+.simulator-frame .cpu-diagram { display: block; width: 100%; min-width: 1120px; height: auto; margin: 0 auto; }
+.internal-bus { stroke: #707b88; stroke-width: 7; opacity: .76; vector-effect: non-scaling-stroke; }
+.bus-tap { fill: #1a2028; stroke: #a6b4c1; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.wire-label { fill: #bac5cf; font: 17px 'DM Mono', monospace; letter-spacing: .035em; }
+.internal-label { fill: #dce5e7; font-size: 19px; }
+.bus-caption { fill: #9caab5; font-size: 16px; }
+.address-label { fill: #d8b083; }
+.data-label { fill: #9dded4; }
+.control-label { fill: #e7b98b; }
+.external-wire { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.address-wire { stroke: #b88e63; opacity: .68; }
+.data-wire { stroke: #729b96; opacity: .68; }
+.control-wire, .control-rail, .control-branch { fill: none; stroke: #a67c55; stroke-width: 2; stroke-dasharray: 7 8; opacity: .38; vector-effect: non-scaling-stroke; }
+.control-branch { stroke-dasharray: 5 7; opacity: .27; }
+.control-tap { fill: #1c2026; stroke: #bc9a74; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.clock-wire { fill: none; stroke: #a77b52; stroke-width: 2.5; opacity: .55; vector-effect: non-scaling-stroke; }
+.cpu-route, .decode-connection { fill: none; stroke: #65717d; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; opacity: .39; vector-effect: non-scaling-stroke; }
+.cpu-route.external-route { stroke: #729b96; opacity: .6; }
+.cpu-route.signal-route { stroke: #9c805f; stroke-width: 2; stroke-dasharray: 6 8; opacity: .42; }
+.cpu-route.route-active, .clock-wire.route-active, .control-rail.route-active, .decode-connection.route-active {
+  stroke: #9aeee2;
+  stroke-width: 4;
+  stroke-dasharray: 3 13;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px rgba(143, 241, 226, .55));
+  animation: electric-current .72s linear infinite;
+}
+.cpu-route.signal-route.route-active, .cpu-route.external-route.route-active, .control-rail.route-active { stroke: #f0bc84; filter: drop-shadow(0 0 4px rgba(240, 188, 132, .45)); }
+.cpu-component rect { fill: rgba(29, 35, 44, .98); stroke: #66717d; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.cpu-component-title { fill: #d7e0e6; font: 17px 'DM Sans', Arial, sans-serif; font-weight: 600; letter-spacing: .045em; }
+.cpu-component-value { fill: #f2bd8c; font: 29px 'DM Mono', monospace; font-weight: 500; }
+.cpu-component-caption { fill: #aeb9c3; font: 15px 'DM Mono', monospace; }
+.ram-component rect { fill: rgba(27, 36, 41, .98); stroke: #829e99; stroke-width: 1.8; }
+.ram-capacity { fill: #b4e4dc; font: 22px 'DM Mono', monospace; }
+.ram-port { fill: none; stroke: #718d88; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.ram-port-label { fill: #b8c7c6; font: 15px 'DM Mono', monospace; }
+.increment-box rect { fill: rgba(31, 37, 45, .98); stroke: #87909a; stroke-width: 1.5; }
+.increment-box text { fill: #d8e0e4; font: 16px 'DM Mono', monospace; }
+.alu-component rect { fill: rgba(41, 35, 30, .98); stroke: #c49b70; stroke-width: 1.7; }
+.alu-component.active-alu rect { stroke: #f0bf8c; stroke-width: 3; filter: drop-shadow(0 0 8px rgba(240, 191, 140, .38)); }
+.alu-op { fill: #f0c093; font: 24px 'DM Mono', monospace; }
+.control-component rect { fill: rgba(39, 34, 30, .98); stroke: #c29769; stroke-width: 1.7; }
+.control-op { fill: #f1c18f; font: 23px 'DM Mono', monospace; }
+.control-detail { fill: #c3cecF; font: 14px 'DM Mono', monospace; }
+.clock-component rect { fill: rgba(28, 37, 39, .98); stroke: #6b9b93; }
+.clock-readout { fill: #a3e6dc; font: 15px 'DM Mono', monospace; }
+.operand-component rect { fill: rgba(28, 34, 41, .98); stroke: #73808b; }
+.operand-value, .flag-value { fill: #cce0df; font: 18px 'DM Mono', monospace; }
+.operand-address { fill: #b5c2ca; font: 14px 'DM Mono', monospace; }
+.flag-component rect { fill: rgba(27, 39, 39, .98); stroke: #70958d; }
+.circuit-edge-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 24px; margin: 8px 4px 0; padding-top: 18px; border-top: 1px solid rgba(103, 116, 128, .42); }
+.edge-description { min-width: 0; }
+.edge-description > .eyebrow { margin: 0; color: #e4b989; font: 13px 'DM Mono', monospace; letter-spacing: .08em; }
+.edge-description > p { margin: 9px 0; color: #eef0f1; font-size: 20px; line-height: 1.42; }
+.edge-signals { display: flex; flex-wrap: wrap; gap: 8px 18px; color: #b7c3cc; font: 13px 'DM Mono', monospace; }
+.active-signal-list { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 14px 0 0; }
+.active-signal-list > small { flex-basis: 100%; color: #e3b585; font: 12px 'DM Mono', monospace; letter-spacing: .075em; }
+.active-signal-list code { padding: 5px 8px; border: 1px solid #6b5948; border-radius: 5px; color: #f0c093; background: rgba(41, 35, 29, .92); font: 12px 'DM Mono', monospace; }
+.clock-actions { display: flex; align-items: center; gap: 10px; padding-bottom: 2px; }
+.clock-actions .primary-button, .clock-actions .secondary-button { min-height: 50px; padding-inline: 22px; font-size: 18px; }
+.configuration-section { display: grid; gap: 14px; margin-top: 24px; scroll-margin-top: 90px; }
+.config-heading { display: flex; justify-content: space-between; align-items: end; gap: 22px; }
+.config-heading .eyebrow { margin-bottom: 7px; color: #f0ba84; }
+.config-heading h2 { margin: 0; font-size: clamp(28px, 3vw, 40px); }
+.config-heading > div > p:not(.eyebrow) { margin: 8px 0 0; color: #bdc5cd; font-size: 18px; }
+.encoding-strip { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px 24px; padding: 12px 16px; border: 1px solid rgba(101, 116, 129, .45); border-radius: 9px; background: rgba(25, 30, 37, .9); color: #cad2d8; font-size: 16px; }
+.encoding-strip b { color: #f0c093; }
+.encoding-strip details { position: relative; }
+.encoding-strip summary { color: #a4e3d8; cursor: pointer; font-weight: 600; }
+.encoding-strip details > p { max-width: 600px; color: #bdc5cd; font-size: 14px; }
+.operation-reference { display: flex; flex-wrap: wrap; gap: 7px 16px; margin-top: 12px; }
+.operation-reference span { color: #bec7cf; font-size: 14px; }
+.operation-reference b { color: #f0c093; font-family: 'DM Mono', monospace; }
+.instruction-config-panel, .ram-initial-panel, .loaded-program-panel, .trace-panel { padding: clamp(16px, 1.6vw, 26px); }
+.instruction-config-panel .panel-heading, .ram-initial-panel .panel-heading, .loaded-program-panel .panel-heading, .trace-panel .panel-heading { margin-bottom: 14px; }
+.instruction-config-panel .panel-heading h3, .ram-initial-panel .panel-heading h3, .loaded-program-panel .panel-heading h3, .trace-panel .panel-heading h3 { margin: 2px 0; font-size: 25px; }
+.instruction-editor { display: grid; gap: 9px; }
+.instruction-editor-row { display: grid; grid-template-columns: 56px minmax(125px, .78fr) minmax(175px, 1fr) minmax(175px, 1fr) minmax(190px, 1.1fr) 112px; align-items: center; gap: 12px; padding: 13px 12px; border: 1px solid #39414b; border-radius: 9px; background: rgba(25, 30, 37, .96); }
+.instruction-order { display: flex; align-items: center; gap: 6px; }
+.instruction-order > b { color: #efbc86; font: 17px 'DM Mono', monospace; }
+.instruction-order > div { display: grid; }
+.instruction-order button { width: 24px; height: 22px; padding: 0; border: 0; border-radius: 4px; color: #d0d9df; background: #303842; cursor: pointer; line-height: 1; }
+.instruction-order button:disabled { opacity: .38; cursor: default; }
+.instruction-editor-row label, .ram-editor-row label { display: grid; gap: 6px; color: #b8c3cc; font-size: 14px; }
+.instruction-editor-row select, .source-config input, .ram-editor-row input { width: 100%; min-width: 0; min-height: 41px; padding: 8px 10px; border: 1px solid #505b67; border-radius: 6px; color: #f1f1ef; background: #11151b; font: 15px 'DM Sans', Arial, sans-serif; }
+.instruction-editor-row select:focus-visible, .source-config input:focus-visible, .ram-editor-row input:focus-visible { outline: 2px solid #a2e8dd; outline-offset: 2px; }
+.source-config { display: grid; grid-template-columns: minmax(0, 1fr) 78px; align-items: end; gap: 7px; }
+.source-config label { min-width: 0; }
+.source-config .address-field input { font-family: 'DM Mono', monospace; }
+.instruction-row-actions { display: grid; gap: 8px; justify-items: start; }
+.halt-note { grid-column: 3 / 6; color: #aebbc4; font-size: 14px; }
+.instruction-row-actions code { color: #a9e4dc; font: 12px 'DM Mono', monospace; white-space: nowrap; }
+.instruction-row-actions button, .ram-editor-row > button { padding: 4px 0; border: 0; color: #c2a080; background: none; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.instruction-row-actions button:disabled { opacity: .38; cursor: default; }
+.compact-help { margin: 0 0 13px; color: #b4bec7; font-size: 16px; line-height: 1.45; }
+.ram-editor-list { display: grid; gap: 8px; }
+.ram-editor-row { display: grid; grid-template-columns: minmax(120px, 180px) minmax(120px, 180px) minmax(180px, 1fr) auto; align-items: end; gap: 12px; padding: 10px 12px; border: 1px solid #39414b; border-radius: 8px; background: rgba(25, 30, 37, .96); }
+.ram-editor-row > span { padding: 10px 0; color: #9dded4; font: 14px 'DM Mono', monospace; }
+.load-config-row { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 4px 2px 8px; }
+.load-config-row .primary-button { min-height: 48px; padding-inline: 20px; white-space: nowrap; }
+.config-message { color: #a9ded5; font-size: 16px; line-height: 1.4; }
+.config-message.error { color: #ffb09d; }
+.loaded-size, .trace-panel .panel-heading > span { color: #aeb9c2; font: 13px 'DM Mono', monospace; }
+.loaded-listing { display: grid; gap: 5px; }
+.loaded-listing-row { display: grid; grid-template-columns: 42px 75px 90px minmax(0, 1fr); align-items: center; gap: 12px; padding: 8px 10px; border-bottom: 1px solid rgba(103, 116, 128, .25); color: #d4dbe0; }
+.loaded-listing-row .listing-number { color: #8995a0; font: 12px 'DM Mono', monospace; }
+.loaded-listing-row code { color: #a9e4dc; font: 14px 'DM Mono', monospace; }
+.loaded-listing-row b { color: #f0bd8a; font: 15px 'DM Mono', monospace; }
+.trace-list { display: grid; max-height: 500px; overflow: auto; }
+.trace-row { display: grid; grid-template-columns: 42px minmax(220px, .7fr) minmax(280px, 1.5fr) minmax(180px, 1fr); align-items: start; gap: 12px; padding: 10px 7px; border-bottom: 1px solid rgba(103, 116, 128, .25); }
+.trace-row > b { color: #f0bd8a; font: 14px 'DM Mono', monospace; }
+.trace-row > span { color: #b9e4dc; font-size: 15px; }
+.trace-row > p { margin: 0; color: #d0d6dc; font-size: 15px; line-height: 1.4; }
+.trace-row > div { display: flex; flex-wrap: wrap; gap: 4px; }
+.trace-row code { color: #e9c092; font: 11px 'DM Mono', monospace; }
+.simulator-frame button:focus-visible, .simulator-frame a:focus-visible, .simulator-frame summary:focus-visible { outline: 2px solid #a5e9de; outline-offset: 3px; }
+@keyframes electric-current { to { stroke-dashoffset: -32; } }
+@media (max-width: 1250px) {
+  .instruction-editor-row { grid-template-columns: 52px repeat(2, minmax(0, 1fr)); }
+  .instruction-order { grid-row: span 2; }
+  .instruction-row-actions { grid-column: 2 / -1; grid-template-columns: auto auto; align-items: center; }
+  .trace-row { grid-template-columns: 42px minmax(170px, .65fr) minmax(240px, 1.35fr); }
+  .trace-row > div { grid-column: 2 / -1; }
+}
+@media (max-width: 760px) {
+  .simulator-frame { padding-inline: 12px; }
+  .simulator-frame .topbar { margin-inline: -12px; padding-inline: 12px; }
+  .circuit-heading { align-items: flex-start; flex-direction: column; gap: 15px; }
+  .circuit-status { grid-template-columns: 12px auto auto; width: 100%; }
+  .circuit-status strong { grid-column: 3; grid-row: 1; margin-left: auto; }
+  .circuit-panel { padding: 12px; }
+  .diagram-heading { align-items: flex-start; flex-direction: column; }
+  .simulator-frame .cpu-diagram { min-width: 1260px; }
+  .circuit-edge-footer { grid-template-columns: 1fr; gap: 14px; }
+  .clock-actions { justify-content: flex-end; }
+  .clock-actions .primary-button, .clock-actions .secondary-button { flex: 1; }
+  .edge-description > p { font-size: 18px; }
+  .config-heading { align-items: flex-start; flex-direction: column; }
+  .encoding-strip { align-items: flex-start; flex-direction: column; font-size: 14px; }
+  .instruction-editor-row { grid-template-columns: 44px minmax(0, 1fr); gap: 10px; }
+  .instruction-order { grid-row: span 4; align-self: start; }
+  .source-config { grid-template-columns: minmax(0, 1fr) 95px; }
+  .halt-note { grid-column: 2; }
+  .instruction-row-actions { grid-column: 2; }
+  .ram-editor-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ram-editor-row > span { grid-column: 1; }
+  .ram-editor-row > button { grid-column: 2; justify-self: end; }
+  .load-config-row { align-items: stretch; flex-direction: column; }
+  .load-config-row .primary-button { width: 100%; }
+  .trace-row { grid-template-columns: 38px minmax(0, 1fr); }
+  .trace-row > p, .trace-row > div { grid-column: 2; }
+  .loaded-listing-row { grid-template-columns: 28px 55px 72px minmax(0, 1fr); gap: 6px; }
+  .loaded-listing-row code { font-size: 12px; }
+  .site-footer { flex-wrap: wrap; gap: 8px 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cpu-route.route-active, .clock-wire.route-active, .control-rail.route-active, .decode-connection.route-active { animation: none; stroke-dasharray: none; }
+  .simulator-light-tunnel .light-tunnel-canvas { opacity: .22; }
+}

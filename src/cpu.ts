@@ -1,17 +1,30 @@
+export type Operation = 'ADD' | 'SUB' | 'MULT' | 'DIV' | 'AND' | 'OR' | 'XOR' | 'HLT'
+export type SourceKind = 'A' | 'B' | 'RAM'
+export type DestinationKind = SourceKind | 'OUT'
+
+export type SourceConfig = { kind: SourceKind; address: number | null }
+export type DestinationConfig = { kind: DestinationKind; address: number | null }
+export type InstructionConfig = {
+  id: number
+  operation: Operation
+  left: SourceConfig
+  right: SourceConfig
+  destination: DestinationConfig
+}
+export type RamInitialValue = { address: number | null; value: number | null }
+
 export type Microstep =
   | 'fetch-address' | 'fetch-opcode' | 'load-ir' | 'decode'
-  | 'operand-address' | 'fetch-operand' | 'load-operand' | 'execute'
-  | 'ldi-writeback' | 'data-address' | 'data-read' | 'data-writeback'
-  | 'store-data' | 'store-memory' | 'alu-a' | 'alu-b' | 'alu-execute'
-  | 'alu-result' | 'alu-writeback' | 'output' | 'branch' | 'halted'
-
-export type StepMode = 'Manual' | 'Automatic' | 'Input'
+  | 'field-address' | 'field-read' | 'field-load' | 'halt-instruction'
+  | 'source1-register' | 'source1-address' | 'source1-read' | 'source1-load'
+  | 'source2-register' | 'source2-address' | 'source2-read' | 'source2-load'
+  | 'alu-load-a' | 'alu-load-b' | 'alu-execute' | 'alu-result' | 'destination-writeback'
+  | 'destination-address' | 'destination-data' | 'destination-store' | 'halted'
 
 export type CycleRecord = {
   id: number
   cycle: number
-  mode: StepMode
-  microstep: string
+  phase: string
   summary: string
   paths: string[]
   signals: string[]
@@ -22,15 +35,17 @@ export type CpuState = {
   mar: number
   mdr: number
   ir: number
-  operand: number
   a: number
   b: number
+  operand1: number
+  operand2: number
   aluA: number
   aluB: number
   aluResult: number
   zRegister: number
   output: number
   zero: boolean
+  negative: boolean
   carry: boolean
   halted: boolean
   cycles: number
@@ -38,111 +53,175 @@ export type CpuState = {
   instructionAddress: number
   microstep: Microstep
   instructionName: string
+  instructionFields: number[]
+  fieldIndex: number
+  leftSource: SourceConfig | null
+  rightSource: SourceConfig | null
+  destination: DestinationConfig | null
   memory: number[]
-  programLength: number
+  programBytes: number[]
+  initialRam: Array<{ address: number; value: number }>
   activePaths: string[]
   activeSignals: string[]
   lastEvent: string
   cycleLog: CycleRecord[]
 }
 
-export type InstructionDefinition = {
-  opcode: number
-  mnemonic: string
-  description: string
-  operand: 'value' | 'address' | 'none'
+export const OPERATIONS: Operation[] = ['ADD', 'SUB', 'MULT', 'DIV', 'AND', 'OR', 'XOR', 'HLT']
+const operationCodes: Record<Operation, number> = {
+  ADD: 0x10, SUB: 0x11, MULT: 0x12, DIV: 0x13,
+  AND: 0x14, OR: 0x15, XOR: 0x16, HLT: 0xff,
 }
-
-export const instructionSet: InstructionDefinition[] = [
-  { opcode: 0x00, mnemonic: 'NOP', description: 'No operation.', operand: 'none' },
-  { opcode: 0x10, mnemonic: 'LDI A', description: 'Load the 8-bit immediate byte into register A.', operand: 'value' },
-  { opcode: 0x11, mnemonic: 'LDI B', description: 'Load the 8-bit immediate byte into register B.', operand: 'value' },
-  { opcode: 0x20, mnemonic: 'LDA', description: 'Load A from the 8-bit RAM address.', operand: 'address' },
-  { opcode: 0x21, mnemonic: 'LDB', description: 'Load B from the 8-bit RAM address.', operand: 'address' },
-  { opcode: 0x30, mnemonic: 'ADD', description: 'Add B to A; store the low byte in A and update Zero and Carry.', operand: 'none' },
-  { opcode: 0x31, mnemonic: 'SUB', description: 'Subtract B from A; store the low byte in A and update Zero and no-borrow Carry.', operand: 'none' },
-  { opcode: 0x40, mnemonic: 'STA', description: 'Store A at the 8-bit RAM address.', operand: 'address' },
-  { opcode: 0x41, mnemonic: 'STB', description: 'Store B at the 8-bit RAM address.', operand: 'address' },
-  { opcode: 0x50, mnemonic: 'OUT', description: 'Copy A to the output register.', operand: 'none' },
-  { opcode: 0x60, mnemonic: 'JMP', description: 'Jump to the 8-bit address.', operand: 'address' },
-  { opcode: 0x61, mnemonic: 'JZ', description: 'Jump to the 8-bit address if Zero is set.', operand: 'address' },
-  { opcode: 0xff, mnemonic: 'HLT', description: 'Stop the processor.', operand: 'none' },
-]
-
-const instructionByOpcode = new Map(instructionSet.map((instruction) => [instruction.opcode, instruction]))
+const operationsByCode = new Map(Object.entries(operationCodes).map(([name, code]) => [code, name as Operation]))
+const sourceCodes: Record<SourceKind, number> = { A: 0, B: 1, RAM: 2 }
+const destinationCodes: Record<DestinationKind, number> = { A: 0, B: 1, RAM: 2, OUT: 3 }
 const byte = (value: number) => value & 0xff
 const blankRam = () => Array(256).fill(0) as number[]
-const demoBytes = [0x10, 0x0b, 0x11, 0x04, 0x30, 0x00, 0x50, 0x00, 0xff, 0x00]
-
-export const demoProgram = [...demoBytes]
-export const demoProgramText = demoBytes.map((value) => value.toString(16).toUpperCase().padStart(2, '0')).join(' ')
-
-export function getInstruction(opcode: number) {
-  return instructionByOpcode.get(byte(opcode)) ?? { opcode: byte(opcode), mnemonic: 'INVALID', description: 'Unknown opcode. The processor will halt safely.', operand: 'none' as const }
-}
 
 export function formatByte(value: number) {
   return `${byte(value).toString(16).toUpperCase().padStart(2, '0')}h`
 }
 
-export function initialCpuState(): CpuState {
+export const DEMO_RAM_INITIAL: RamInitialValue[] = [
+  { address: 0x80, value: 11 },
+  { address: 0x81, value: 4 },
+  { address: 0x82, value: 3 },
+]
+
+export const DEMO_INSTRUCTIONS: InstructionConfig[] = [
+  { id: 1, operation: 'ADD', left: { kind: 'RAM', address: 0x80 }, right: { kind: 'RAM', address: 0x81 }, destination: { kind: 'A', address: null } },
+  { id: 2, operation: 'SUB', left: { kind: 'A', address: null }, right: { kind: 'RAM', address: 0x81 }, destination: { kind: 'B', address: null } },
+  { id: 3, operation: 'MULT', left: { kind: 'B', address: null }, right: { kind: 'RAM', address: 0x82 }, destination: { kind: 'A', address: null } },
+  { id: 4, operation: 'DIV', left: { kind: 'A', address: null }, right: { kind: 'RAM', address: 0x82 }, destination: { kind: 'B', address: null } },
+  { id: 5, operation: 'AND', left: { kind: 'A', address: null }, right: { kind: 'B', address: null }, destination: { kind: 'A', address: null } },
+  { id: 6, operation: 'OR', left: { kind: 'A', address: null }, right: { kind: 'B', address: null }, destination: { kind: 'B', address: null } },
+  { id: 7, operation: 'XOR', left: { kind: 'A', address: null }, right: { kind: 'B', address: null }, destination: { kind: 'OUT', address: null } },
+  { id: 8, operation: 'ADD', left: { kind: 'RAM', address: 0x80 }, right: { kind: 'RAM', address: 0x81 }, destination: { kind: 'OUT', address: null } },
+  { id: 9, operation: 'HLT', left: { kind: 'A', address: null }, right: { kind: 'A', address: null }, destination: { kind: 'OUT', address: null } },
+]
+
+export function encodeInstructions(instructions: InstructionConfig[]) {
+  if (!instructions.length) throw new Error('Add at least one instruction before loading the program.')
+  const bytes: number[] = []
+  for (const [index, instruction] of instructions.entries()) {
+    const operation = operationCodes[instruction.operation]
+    if (operation === undefined) throw new Error(`Instruction ${index + 1} has an unknown operation.`)
+    if (instruction.operation === 'HLT') {
+      bytes.push(operation, 0, 0, 0, 0, 0, 0)
+      continue
+    }
+    const sourceByte = (source: SourceConfig, field: string) => {
+      if (!(source.kind in sourceCodes)) throw new Error(`Instruction ${index + 1}: choose a valid ${field} source.`)
+      if (source.kind === 'RAM' && (!Number.isInteger(source.address) || source.address === null || source.address < 0 || source.address > 255)) {
+        throw new Error(`Instruction ${index + 1}: ${field} RAM address must be 0–255.`)
+      }
+      return [sourceCodes[source.kind], source.kind === 'RAM' ? source.address! : 0]
+    }
+    const destination = instruction.destination
+    if (!(destination.kind in destinationCodes)) throw new Error(`Instruction ${index + 1}: choose a valid destination.`)
+    if (destination.kind === 'RAM' && (!Number.isInteger(destination.address) || destination.address === null || destination.address < 0 || destination.address > 255)) {
+      throw new Error(`Instruction ${index + 1}: destination RAM address must be 0–255.`)
+    }
+    bytes.push(operation, ...sourceByte(instruction.left, 'first operand'), ...sourceByte(instruction.right, 'second operand'), destinationCodes[destination.kind], destination.kind === 'RAM' ? destination.address! : 0)
+  }
+  if (bytes.length > 256) throw new Error('The program exceeds the 256-byte RAM capacity. Remove instructions to continue.')
+  return bytes
+}
+
+const demoBytes = encodeInstructions(DEMO_INSTRUCTIONS)
+
+export function initialCpuState(programBytes = demoBytes, initialRam = DEMO_RAM_INITIAL): CpuState {
   const memory = blankRam()
-  demoBytes.forEach((value, address) => { memory[address] = value })
+  programBytes.forEach((value, address) => { memory[address] = byte(value) })
+  for (const entry of initialRam) if (entry.address !== null && entry.value !== null) memory[entry.address] = byte(entry.value)
   return {
-    pc: 0, mar: 0, mdr: 0, ir: 0, operand: 0, a: 0, b: 0,
-    aluA: 0, aluB: 0, aluResult: 0, zRegister: 0, output: 0,
-    zero: false, carry: false, halted: false, cycles: 0, completedInstructions: 0,
-    instructionAddress: 0, microstep: 'fetch-address', instructionName: '—', memory, programLength: demoBytes.length,
-    activePaths: [], activeSignals: [], lastEvent: 'Ready. Step the clock to begin fetching the sample program.', cycleLog: [],
+    pc: 0, mar: 0, mdr: 0, ir: 0, a: 0, b: 0, operand1: 0, operand2: 0, aluA: 0, aluB: 0,
+    aluResult: 0, zRegister: 0, output: 0, zero: false, negative: false, carry: false,
+    halted: false, cycles: 0, completedInstructions: 0, instructionAddress: 0,
+    microstep: 'fetch-address', instructionName: '—', instructionFields: [], fieldIndex: 0,
+    leftSource: null, rightSource: null, destination: null, memory, programBytes: [...programBytes],
+    initialRam: initialRam.filter((entry): entry is { address: number; value: number } => entry.address !== null && entry.value !== null).map((entry) => ({ ...entry })),
+    activePaths: [], activeSignals: [], lastEvent: 'Ready. Step the clock to fetch the first instruction.', cycleLog: [],
   }
 }
 
-export function resetCpu(_state?: CpuState): CpuState {
-  return initialCpuState()
+export function resetCpu(state?: CpuState) {
+  return state ? initialCpuState(state.programBytes, state.initialRam) : initialCpuState()
 }
 
-const labels: Record<Microstep, string> = {
-  'fetch-address': 'Fetch · PC to MAR',
-  'fetch-opcode': 'Fetch · memory read to MDR',
-  'load-ir': 'Fetch · MDR to IR',
-  decode: 'Decode instruction',
-  'operand-address': 'Fetch operand · PC to MAR',
-  'fetch-operand': 'Fetch operand · memory read to MDR',
-  'load-operand': 'Fetch operand · MDR to operand register',
-  execute: 'Execute instruction',
-  'ldi-writeback': 'Immediate · operand to register',
-  'data-address': 'Memory access · operand to MAR',
-  'data-read': 'Memory access · RAM to MDR',
-  'data-writeback': 'Memory access · MDR to register',
-  'store-data': 'Memory access · register to MDR',
-  'store-memory': 'Memory access · MDR to RAM',
-  'alu-a': 'ALU input · A to ALU',
-  'alu-b': 'ALU input · B to ALU',
-  'alu-execute': 'ALU operation',
-  'alu-result': 'ALU result to Z',
-  'alu-writeback': 'Writeback · Z to A',
-  output: 'Output · A to output register',
-  branch: 'Branch decision',
-  halted: 'Processor halted',
+export function loadConfiguredProgram(state: CpuState, instructions: InstructionConfig[], ramValues: RamInitialValue[]) {
+  try {
+    const bytes = encodeInstructions(instructions)
+    const initialRam: Array<{ address: number; value: number }> = []
+    const seen = new Set<number>()
+    for (const [index, entry] of ramValues.entries()) {
+      if (!Number.isInteger(entry.address) || entry.address === null || entry.address < 0 || entry.address > 255) throw new Error(`RAM value ${index + 1}: address must be 0–255.`)
+      if (!Number.isInteger(entry.value) || entry.value === null || entry.value < 0 || entry.value > 255) throw new Error(`RAM value ${index + 1}: byte value must be 0–255.`)
+      if (entry.address < bytes.length) throw new Error(`RAM[${formatByte(entry.address)}] overlaps the ${bytes.length}-byte program. Choose an address from ${formatByte(bytes.length)} to FFh.`)
+      if (seen.has(entry.address)) throw new Error(`RAM address ${formatByte(entry.address)} is listed more than once.`)
+      seen.add(entry.address)
+      initialRam.push({ address: entry.address, value: entry.value })
+    }
+    const next = initialCpuState(bytes, initialRam)
+    next.lastEvent = `${instructions.length} instruction${instructions.length === 1 ? '' : 's'} loaded (${bytes.length} bytes). Ready at PC 00h.`
+    return { state: next, error: '' }
+  } catch (error) {
+    return { state: { ...state, lastEvent: 'Program was not loaded. Correct the configuration below and try again.' }, error: error instanceof Error ? error.message : 'Program configuration is invalid.' }
+  }
 }
 
-export function microstepLabel(step: Microstep) {
-  return labels[step]
+const phaseLabels: Record<Microstep, string> = {
+  'fetch-address': 'Fetch · PC → MAR', 'fetch-opcode': 'Fetch · RAM → MDR', 'load-ir': 'Fetch · MDR → IR', decode: 'Decode · IR → control unit',
+  'field-address': 'Decode fields · PC → MAR', 'field-read': 'Decode fields · RAM → MDR', 'field-load': 'Decode fields · MDR → instruction registers', 'halt-instruction': 'Halt instruction',
+  'source1-register': 'Read operand 1 · register → operand latch', 'source1-address': 'Read operand 1 · address → MAR', 'source1-read': 'Read operand 1 · RAM → MDR', 'source1-load': 'Read operand 1 · MDR → operand latch',
+  'source2-register': 'Read operand 2 · register → operand latch', 'source2-address': 'Read operand 2 · address → MAR', 'source2-read': 'Read operand 2 · RAM → MDR', 'source2-load': 'Read operand 2 · MDR → operand latch',
+  'alu-load-a': 'ALU input · operand 1 → ALU A', 'alu-load-b': 'ALU input · operand 2 → ALU B',
+  'alu-execute': 'Execute · ALU operation', 'alu-result': 'Write result · ALU → Z', 'destination-writeback': 'Write result · Z → destination',
+  'destination-address': 'Write result · destination address → MAR', 'destination-data': 'Write result · Z → MDR', 'destination-store': 'Write result · MDR → RAM', halted: 'Processor halted',
 }
 
-function finishInstruction(state: CpuState): CpuState {
-  return { ...state, microstep: 'fetch-address', completedInstructions: state.completedInstructions + 1 }
+export function microstepLabel(step: Microstep) { return phaseLabels[step] }
+
+function finishInstruction(state: CpuState) {
+  return { ...state, microstep: 'fetch-address' as const, completedInstructions: state.completedInstructions + 1, instructionFields: [], fieldIndex: 0 }
 }
 
-export function stepClock(state: CpuState, mode: StepMode = 'Manual'): CpuState {
+function sourceFromFields(kind: number, address: number): SourceConfig | null {
+  if (kind === 0) return { kind: 'A', address: null }
+  if (kind === 1) return { kind: 'B', address: null }
+  if (kind === 2) return { kind: 'RAM', address }
+  return null
+}
+
+function nextSourceStep(source: SourceConfig | null, which: 1 | 2): Microstep {
+  if (!source) return 'halted'
+  return source.kind === 'RAM' ? `source${which}-address` : `source${which}-register`
+}
+
+function arithmetic(operation: Operation, left: number, right: number) {
+  let raw: number
+  let carry: boolean
+  switch (operation) {
+    case 'ADD': raw = left + right; carry = raw > 0xff; break
+    case 'SUB': raw = left - right; carry = left >= right; break
+    case 'MULT': raw = left * right; carry = raw > 0xff; break
+    case 'DIV': raw = right === 0 ? 0 : Math.floor(left / right); carry = right === 0; break
+    case 'AND': raw = left & right; carry = false; break
+    case 'OR': raw = left | right; carry = false; break
+    case 'XOR': raw = left ^ right; carry = false; break
+    default: raw = 0; carry = false
+  }
+  const result = byte(raw)
+  return { result, zero: result === 0, negative: (result & 0x80) !== 0, carry }
+}
+
+export function stepClock(state: CpuState): CpuState {
   if (state.halted || state.microstep === 'halted') return state
-
   const next: CpuState = { ...state, memory: [...state.memory], cycles: state.cycles + 1, activePaths: [], activeSignals: [] }
-  const opcode = next.ir
-  const definition = getInstruction(opcode)
-  const paths: string[] = []
-  let signals: string[] = []
+  const paths: string[] = ['clock-edge', 'cu-control']
+  const signals: string[] = ['CU_STEP']
   let summary = ''
+  const definition = operationsByCode.get(state.ir)
   const complete = () => Object.assign(next, finishInstruction(next))
 
   switch (state.microstep) {
@@ -153,277 +232,217 @@ export function stepClock(state: CpuState, mode: StepMode = 'Manual'): CpuState 
       next.pc = byte(address + 1)
       next.microstep = 'fetch-opcode'
       paths.push('pc-mar', 'pc-increment')
-      signals = ['PC_OUT', 'MAR_IN', 'PC_INCREMENT']
-      summary = `PC (${formatByte(address)}) drives the internal bus; MAR captures the opcode address while PC advances by one byte.`
+      signals.push('PC_OUT', 'MAR_IN', 'PC_INCREMENT', 'CLOCK_RISE')
+      summary = `PC → MAR at ${formatByte(address)}; PC increments by one byte.`
       break
     }
     case 'fetch-opcode':
       next.mdr = state.memory[state.mar] ?? 0
       next.microstep = 'load-ir'
-      paths.push('mar-ram', 'ram-mdr')
-      signals = ['MAR_OUT', 'MEM_READ', 'WMFC', 'MDR_IN']
-      summary = `RAM[${formatByte(state.mar)}] returns opcode ${formatByte(next.mdr)} to MDR; WMFC confirms the read.`
+      paths.push('mar-ram', 'ram-mdr', 'ram-read')
+      signals.push('MAR_OUT', 'MEM_READ', 'WMFC', 'MDR_IN', 'CLOCK_RISE')
+      summary = `RAM[${formatByte(state.mar)}] → MDR (${formatByte(next.mdr)}); memory read completed.`
       break
     case 'load-ir':
       next.ir = state.mdr
-      next.instructionName = getInstruction(state.mdr).mnemonic
+      next.instructionName = operationsByCode.get(state.mdr) ?? 'INVALID'
       next.microstep = 'decode'
       paths.push('mdr-ir')
-      signals = ['MDR_OUT', 'IR_IN']
-      summary = `MDR transfers ${formatByte(state.mdr)} into IR.`
+      signals.push('MDR_OUT', 'IR_IN', 'CLOCK_RISE')
+      summary = `MDR → IR (${formatByte(state.mdr)}); opcode is held for decoding.`
       break
     case 'decode':
-      next.instructionName = definition.mnemonic
-      next.microstep = 'operand-address'
-      signals = ['IR_OUT', 'DECODE', `OP_${definition.mnemonic.replaceAll(' ', '_')}`]
-      summary = `Decoder identifies ${definition.mnemonic}: ${definition.description}`
+      if (!definition) {
+        next.halted = true; next.microstep = 'halted'
+        signals.push('INVALID_OPCODE', 'CLOCK_RISE')
+        summary = `Unknown opcode ${formatByte(state.ir)}; processor halted safely.`
+      } else {
+        next.instructionName = definition
+        next.instructionFields = []
+        next.fieldIndex = 0
+        next.microstep = 'field-address'
+        paths.push('ir-control')
+        signals.push('IR_OUT', 'DECODE', `OP_${definition}`, 'CLOCK_RISE')
+        summary = `Control unit decodes ${definition}; six configuration bytes will be fetched next.`
+      }
       break
-    case 'operand-address': {
+    case 'field-address': {
       const address = state.pc
-      next.mar = address
-      next.pc = byte(address + 1)
-      next.microstep = 'fetch-operand'
+      next.mar = address; next.pc = byte(address + 1); next.microstep = 'field-read'
       paths.push('pc-mar', 'pc-increment')
-      signals = ['PC_OUT', 'MAR_IN', 'PC_INCREMENT']
-      summary = `PC places the second instruction byte address ${formatByte(address)} in MAR and advances by one.`
+      signals.push('PC_OUT', 'MAR_IN', 'PC_INCREMENT', 'CLOCK_RISE')
+      summary = `PC → MAR at ${formatByte(address)} to fetch instruction configuration byte ${state.fieldIndex + 1} of 6.`
       break
     }
-    case 'fetch-operand':
-      next.mdr = state.memory[state.mar] ?? 0
-      next.microstep = 'load-operand'
-      paths.push('mar-ram', 'ram-mdr')
-      signals = ['MAR_OUT', 'MEM_READ', 'WMFC', 'MDR_IN']
-      summary = `RAM[${formatByte(state.mar)}] returns operand ${formatByte(next.mdr)} to MDR.`
+    case 'field-read':
+      next.mdr = state.memory[state.mar] ?? 0; next.microstep = 'field-load'
+      paths.push('mar-ram', 'ram-mdr', 'ram-read')
+      signals.push('MAR_OUT', 'MEM_READ', 'WMFC', 'MDR_IN', 'CLOCK_RISE')
+      summary = `RAM[${formatByte(state.mar)}] → MDR (${formatByte(next.mdr)}); configuration byte read completed.`
       break
-    case 'load-operand':
-      next.operand = state.mdr
-      next.microstep = 'execute'
-      paths.push('mdr-operand')
-      signals = ['MDR_OUT', 'OPERAND_IN']
-      summary = `MDR transfers ${formatByte(state.mdr)} into the operand register.`
-      break
-    case 'execute':
-      switch (definition.mnemonic) {
-        case 'NOP':
-          signals = ['NOP', 'INSTRUCTION_DONE']
-          summary = 'NOP completes without changing a data register.'
-          complete()
-          break
-        case 'LDI A':
-        case 'LDI B':
-          next.microstep = 'ldi-writeback'
-          signals = ['OPERAND_SELECT', definition.mnemonic === 'LDI A' ? 'A_IN' : 'B_IN']
-          summary = `The decoder selects the operand byte ${formatByte(state.operand)} as the ${definition.mnemonic.endsWith('A') ? 'A' : 'B'} input.`
-          break
-        case 'LDA': case 'LDB': case 'STA': case 'STB':
-          next.microstep = 'data-address'
-          signals = ['OPERAND_OUT', 'MAR_IN']
-          summary = `The operand ${formatByte(state.operand)} is selected as the RAM address.`
-          break
-        case 'ADD': case 'SUB':
-          next.microstep = 'alu-a'
-          signals = ['ALU_SELECT', `ALU_${definition.mnemonic}`]
-          summary = `${definition.mnemonic} is decoded. A and B will be placed on the shared bus in separate clock edges.`
-          break
-        case 'OUT':
-          next.microstep = 'output'
-          signals = ['A_OUT', 'OUTPUT_IN']
-          summary = 'A is selected for transfer to the output register.'
-          break
-        case 'JMP': case 'JZ':
-          next.microstep = 'branch'
-          signals = ['BRANCH_TEST', ...(definition.mnemonic === 'JZ' ? ['ZERO_TEST'] : [])]
-          summary = definition.mnemonic === 'JMP' ? `Unconditional branch target is ${formatByte(state.operand)}.` : `Zero flag is ${state.zero ? 'set' : 'clear'}; conditional target is ${formatByte(state.operand)}.`
-          break
-        case 'HLT': case 'INVALID':
-          next.halted = true
-          next.microstep = 'halted'
-          next.completedInstructions += 1
-          signals = [definition.mnemonic === 'HLT' ? 'HALT' : 'INVALID_OPCODE']
-          summary = definition.mnemonic === 'HLT' ? 'HLT stops the processor.' : `Opcode ${formatByte(state.ir)} is not defined; processor halted safely.`
-          break
-        default:
-          next.halted = true
-          next.microstep = 'halted'
-          next.completedInstructions += 1
-          signals = ['INVALID_OPCODE']
-          summary = `Opcode ${formatByte(state.ir)} is not defined; processor halted safely.`
-      }
-      break
-    case 'ldi-writeback':
-      if (definition.mnemonic === 'LDI A') {
-        next.a = state.operand
-        next.zero = state.operand === 0
-        paths.push('operand-a')
-        signals = ['OPERAND_OUT', 'A_IN', 'FLAGS_IN']
-        summary = `Operand ${formatByte(state.operand)} travels on the internal bus into A.`
+    case 'field-load': {
+      const fields = [...state.instructionFields, state.mdr]
+      next.instructionFields = fields
+      next.fieldIndex = fields.length
+      paths.push('mdr-fields')
+      signals.push('MDR_OUT', 'INSTRUCTION_FIELDS_IN', 'CLOCK_RISE')
+      if (fields.length < 6) {
+        next.microstep = 'field-address'
+        summary = `MDR → instruction field ${fields.length} (${formatByte(state.mdr)}).`
+      } else if (state.instructionName === 'HLT') {
+        next.microstep = 'halt-instruction'
+        summary = 'All HLT fields are read; the processor will stop on the next edge.'
       } else {
-        next.b = state.operand
-        paths.push('operand-b')
-        signals = ['OPERAND_OUT', 'B_IN']
-        summary = `Operand ${formatByte(state.operand)} travels on the internal bus into B.`
-      }
-      complete()
-      break
-    case 'data-address':
-      next.mar = state.operand
-      paths.push('operand-mar')
-      signals = ['OPERAND_OUT', 'MAR_IN']
-      if (definition.mnemonic === 'LDA' || definition.mnemonic === 'LDB') {
-        next.microstep = 'data-read'
-        summary = `Operand ${formatByte(state.operand)} is latched in MAR as the RAM read address.`
-      } else {
-        next.microstep = 'store-data'
-        summary = `Operand ${formatByte(state.operand)} is latched in MAR as the RAM write address.`
+        const left = sourceFromFields(fields[0], fields[1])
+        const right = sourceFromFields(fields[2], fields[3])
+        const destKind = fields[4] === 0 ? 'A' : fields[4] === 1 ? 'B' : fields[4] === 2 ? 'RAM' : fields[4] === 3 ? 'OUT' : null
+        if (!left || !right || !destKind) {
+          next.halted = true; next.microstep = 'halted'
+          signals.push('INVALID_CONFIGURATION')
+          summary = 'Instruction source or destination code is invalid; processor halted safely.'
+        } else {
+          next.leftSource = left
+          next.rightSource = right
+          next.destination = { kind: destKind, address: destKind === 'RAM' ? fields[5] : null }
+          next.microstep = nextSourceStep(left, 1)
+          summary = `MDR → instruction field 6 (${formatByte(state.mdr)}); ${state.instructionName} sources and destination are ready.`
+        }
       }
       break
-    case 'data-read':
-      next.mdr = state.memory[state.mar] ?? 0
-      next.microstep = 'data-writeback'
-      paths.push('mar-ram', 'ram-mdr')
-      signals = ['MAR_OUT', 'MEM_READ', 'WMFC', 'MDR_IN']
-      summary = `RAM[${formatByte(state.mar)}] returns ${formatByte(next.mdr)} to MDR.`
+    }
+    case 'halt-instruction':
+      next.halted = true; next.microstep = 'halted'; next.completedInstructions += 1
+      signals.push('HALT', 'CLOCK_RISE')
+      summary = 'HLT stops the processor. Reset to start again.'
       break
-    case 'data-writeback':
-      if (definition.mnemonic === 'LDA') {
-        next.a = state.mdr
-        next.zero = state.mdr === 0
-        paths.push('mdr-a')
-        signals = ['MDR_OUT', 'A_IN', 'FLAGS_IN']
-        summary = `MDR transfers ${formatByte(state.mdr)} into A.`
-      } else {
-        next.b = state.mdr
-        paths.push('mdr-b')
-        signals = ['MDR_OUT', 'B_IN']
-        summary = `MDR transfers ${formatByte(state.mdr)} into B.`
-      }
-      complete()
+    case 'source1-register': {
+      const source = state.leftSource!
+      next.operand1 = source.kind === 'A' ? state.a : state.b
+      next.microstep = nextSourceStep(state.rightSource, 2)
+      paths.push(source.kind === 'A' ? 'a-operand1' : 'b-operand1')
+      signals.push(`${source.kind}_OUT`, 'OPERAND1_IN', 'CLOCK_RISE')
+      summary = `${source.kind} → operand 1 (${formatByte(next.operand1)}).`
       break
-    case 'store-data':
-      if (definition.mnemonic === 'STA') {
-        next.mdr = state.a
-        paths.push('a-mdr')
-        signals = ['A_OUT', 'MDR_IN']
-        summary = `A (${formatByte(state.a)}) transfers to MDR for the RAM write.`
-      } else {
-        next.mdr = state.b
-        paths.push('b-mdr')
-        signals = ['B_OUT', 'MDR_IN']
-        summary = `B (${formatByte(state.b)}) transfers to MDR for the RAM write.`
-      }
-      next.microstep = 'store-memory'
+    }
+    case 'source1-address':
+      next.mar = state.leftSource!.address ?? 0; next.microstep = 'source1-read'
+      paths.push('source1-address-mar')
+      signals.push('SOURCE1_ADDRESS_OUT', 'MAR_IN', 'CLOCK_RISE')
+      summary = `Operand 1 RAM address ${formatByte(next.mar)} → MAR.`
       break
-    case 'store-memory':
-      next.memory[state.mar] = state.mdr
-      paths.push('mar-ram', 'mdr-ram')
-      signals = ['MAR_OUT', 'MDR_OUT', 'MEM_WRITE']
-      summary = `MDR writes ${formatByte(state.mdr)} to RAM[${formatByte(state.mar)}].`
-      complete()
+    case 'source1-read':
+      next.mdr = state.memory[state.mar] ?? 0; next.microstep = 'source1-load'
+      paths.push('mar-ram', 'ram-mdr', 'ram-read')
+      signals.push('MAR_OUT', 'MEM_READ', 'WMFC', 'MDR_IN', 'CLOCK_RISE')
+      summary = `RAM[${formatByte(state.mar)}] → MDR (${formatByte(next.mdr)}); operand 1 read completed.`
       break
-    case 'alu-a':
-      next.aluA = state.a
-      next.microstep = 'alu-b'
-      paths.push('a-alu')
-      signals = ['A_OUT', 'ALU_A_IN']
-      summary = `A (${formatByte(state.a)}) drives the shared bus into ALU input A.`
+    case 'source1-load':
+      next.operand1 = state.mdr; next.microstep = nextSourceStep(state.rightSource, 2)
+      paths.push('mdr-operand1')
+      signals.push('MDR_OUT', 'OPERAND1_IN', 'CLOCK_RISE')
+      summary = `MDR → operand 1 (${formatByte(state.mdr)}).`
       break
-    case 'alu-b':
-      next.aluB = state.b
-      next.microstep = 'alu-execute'
-      paths.push('b-alu')
-      signals = ['B_OUT', 'ALU_B_IN']
-      summary = `B (${formatByte(state.b)}) drives the shared bus into ALU input B.`
+    case 'source2-register': {
+      const source = state.rightSource!
+      next.operand2 = source.kind === 'A' ? state.a : state.b
+      next.microstep = 'alu-load-a'
+      paths.push(source.kind === 'A' ? 'a-operand2' : 'b-operand2')
+      signals.push(`${source.kind}_OUT`, 'OPERAND2_IN', 'CLOCK_RISE')
+      summary = `${source.kind} → operand 2 (${formatByte(next.operand2)}).`
+      break
+    }
+    case 'source2-address':
+      next.mar = state.rightSource!.address ?? 0; next.microstep = 'source2-read'
+      paths.push('source2-address-mar')
+      signals.push('SOURCE2_ADDRESS_OUT', 'MAR_IN', 'CLOCK_RISE')
+      summary = `Operand 2 RAM address ${formatByte(next.mar)} → MAR.`
+      break
+    case 'source2-read':
+      next.mdr = state.memory[state.mar] ?? 0; next.microstep = 'source2-load'
+      paths.push('mar-ram', 'ram-mdr', 'ram-read')
+      signals.push('MAR_OUT', 'MEM_READ', 'WMFC', 'MDR_IN', 'CLOCK_RISE')
+      summary = `RAM[${formatByte(state.mar)}] → MDR (${formatByte(next.mdr)}); operand 2 read completed.`
+      break
+    case 'source2-load':
+      next.operand2 = state.mdr; next.microstep = 'alu-load-a'
+      paths.push('mdr-operand2')
+      signals.push('MDR_OUT', 'OPERAND2_IN', 'CLOCK_RISE')
+      summary = `MDR → operand 2 (${formatByte(state.mdr)}).`
+      break
+    case 'alu-load-a':
+      next.aluA = state.operand1; next.microstep = 'alu-load-b'
+      paths.push('operand1-alu')
+      signals.push('OPERAND1_OUT', 'ALU_A_IN', 'CLOCK_RISE')
+      summary = `Operand 1 (${formatByte(state.operand1)}) → ALU input A.`
+      break
+    case 'alu-load-b':
+      next.aluB = state.operand2; next.microstep = 'alu-execute'
+      paths.push('operand2-alu')
+      signals.push('OPERAND2_OUT', 'ALU_B_IN', 'CLOCK_RISE')
+      summary = `Operand 2 (${formatByte(state.operand2)}) → ALU input B.`
       break
     case 'alu-execute': {
-      const result = definition.mnemonic === 'ADD' ? state.aluA + state.aluB : state.aluA - state.aluB
-      next.aluResult = byte(result)
-      next.zero = byte(result) === 0
-      next.carry = definition.mnemonic === 'ADD' ? result > 0xff : state.aluA >= state.aluB
+      const flags = arithmetic(state.instructionName as Operation, state.aluA, state.aluB)
+      next.aluResult = flags.result; next.zero = flags.zero; next.negative = flags.negative; next.carry = flags.carry
       next.microstep = 'alu-result'
-      signals = [`ALU_${definition.mnemonic}`, 'FLAGS_IN']
-      summary = `ALU computes ${formatByte(state.aluA)} ${definition.mnemonic === 'ADD' ? '+' : '−'} ${formatByte(state.aluB)} = ${formatByte(result)}; flags are updated.`
+      paths.push('alu-flags')
+      signals.push(`ALU_${state.instructionName}`, 'FLAGS_IN', 'CLOCK_RISE')
+      summary = state.instructionName === 'DIV' && state.aluB === 0
+        ? 'DIV by zero produces 00h; Carry is set and writeback continues.'
+        : `ALU computes ${formatByte(state.aluA)} ${state.instructionName} ${formatByte(state.aluB)} = ${formatByte(flags.result)}; flags updated.`
       break
     }
     case 'alu-result':
       next.zRegister = state.aluResult
-      next.microstep = 'alu-writeback'
+      next.microstep = state.destination?.kind === 'RAM' ? 'destination-address' : 'destination-writeback'
       paths.push('alu-z')
-      signals = ['ALU_OUT', 'Z_IN']
-      summary = `ALU result ${formatByte(state.aluResult)} transfers over the bus into result register Z.`
+      signals.push('ALU_OUT', 'Z_IN', 'CLOCK_RISE')
+      summary = `ALU result ${formatByte(state.aluResult)} → Z result register.`
       break
-    case 'alu-writeback':
-      next.a = state.zRegister
-      next.microstep = 'fetch-address'
-      next.completedInstructions += 1
-      paths.push('z-a')
-      signals = ['Z_OUT', 'A_IN', 'INSTRUCTION_DONE']
-      summary = `Z transfers ${formatByte(state.zRegister)} to A; instruction complete.`
-      break
-    case 'output':
-      next.output = state.a
-      signals = ['A_OUT', 'OUTPUT_IN', 'INSTRUCTION_DONE']
-      paths.push('a-output')
-      summary = `A transfers ${formatByte(state.a)} to the output register.`
-      complete()
-      break
-    case 'branch': {
-      const taken = definition.mnemonic === 'JMP' || (definition.mnemonic === 'JZ' && state.zero)
-      signals = [definition.mnemonic === 'JMP' ? 'JUMP' : 'ZERO_TEST', ...(taken ? ['PC_IN'] : ['BRANCH_NOT_TAKEN'])]
-      if (taken) {
-        next.pc = state.operand
-        paths.push('operand-pc')
-        summary = `${definition.mnemonic} transfers ${formatByte(state.operand)} to PC.`
-      } else {
-        summary = `JZ not taken; Zero is clear and PC remains ${formatByte(state.pc)}.`
-      }
+    case 'destination-writeback': {
+      const destination = state.destination!
+      if (destination.kind === 'A') paths.push('z-a')
+      if (destination.kind === 'B') paths.push('z-b')
+      if (destination.kind === 'OUT') paths.push('z-output')
+      if (destination.kind === 'A') next.a = state.zRegister
+      if (destination.kind === 'B') next.b = state.zRegister
+      if (destination.kind === 'OUT') next.output = state.zRegister
+      signals.push('Z_OUT', `${destination.kind}_IN`, 'INSTRUCTION_DONE', 'CLOCK_RISE')
+      summary = `Z (${formatByte(state.zRegister)}) → ${destination.kind === 'OUT' ? 'output register' : `Register ${destination.kind}`}.`
       complete()
       break
     }
+    case 'destination-address':
+      next.mar = state.destination?.address ?? 0; next.microstep = 'destination-data'
+      paths.push('destination-address-mar')
+      signals.push('DESTINATION_ADDRESS_OUT', 'MAR_IN', 'CLOCK_RISE')
+      summary = `Destination RAM address ${formatByte(next.mar)} → MAR.`
+      break
+    case 'destination-data':
+      next.mdr = state.zRegister; next.microstep = 'destination-store'
+      paths.push('z-mdr')
+      signals.push('Z_OUT', 'MDR_IN', 'CLOCK_RISE')
+      summary = `Z (${formatByte(state.zRegister)}) → MDR for the RAM write.`
+      break
+    case 'destination-store':
+      next.memory[state.mar] = state.mdr
+      paths.push('mar-ram', 'mdr-ram', 'ram-write')
+      signals.push('MAR_OUT', 'MDR_OUT', 'MEM_WRITE', 'CLOCK_RISE')
+      summary = `MDR (${formatByte(state.mdr)}) → RAM[${formatByte(state.mar)}]; write completed.`
+      complete()
+      break
   }
 
   next.activePaths = paths
   next.activeSignals = signals
-  next.lastEvent = `Clock ${next.cycles} · ${labels[state.microstep]}. ${summary}`
+  next.lastEvent = summary
   next.cycleLog = [...state.cycleLog, {
     id: state.cycleLog.length + 1,
     cycle: next.cycles,
-    mode,
-    microstep: labels[state.microstep],
-    summary: next.lastEvent,
+    phase: phaseLabels[state.microstep],
+    summary,
     paths: [...paths],
     signals: [...signals],
-  }].slice(-200)
-  return next
-}
-
-export function stepInstruction(state: CpuState, mode: StepMode = 'Automatic'): CpuState {
-  if (state.halted) return state
-  const completed = state.completedInstructions
-  let next = state
-  let attempts = 0
-  while (!next.halted && next.completedInstructions === completed && attempts < 20) {
-    next = stepClock(next, mode)
-    attempts += 1
-  }
-  return next
-}
-
-export function installProgram(state: CpuState, source: string): CpuState {
-  const tokens = source.split(/[\s,;]+/).filter(Boolean).map((part) => part.replace(/^0x/i, ''))
-  const valid = tokens.every((token) => /^[0-9a-f]{1,2}$/i.test(token))
-  const values = tokens.map((part) => Number.parseInt(part, 16))
-  if (!valid || values.length === 0 || values.length > 256 || values.length % 2 !== 0) {
-    return { ...state, lastEvent: 'Program not loaded. Enter an even number of 1–2 digit hex bytes (maximum 256 bytes); each instruction uses two bytes.' }
-  }
-  const memory = blankRam()
-  values.forEach((value, index) => { memory[index] = value })
-  const next = initialCpuState()
-  next.memory = memory
-  next.programLength = values.length
-  next.lastEvent = `${values.length / 2} instruction${values.length === 2 ? '' : 's'} loaded at address 00.`
-  next.cycleLog = [...state.cycleLog, {
-    id: state.cycleLog.length + 1, cycle: 0, mode: 'Input' as const, microstep: 'Program loader',
-    summary: next.lastEvent, paths: [], signals: [],
-  }].slice(-200)
+  }].slice(-240)
   return next
 }
