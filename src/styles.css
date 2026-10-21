@@ -703,6 +703,7 @@ body { background: #101116; color: var(--text); }
 .address-label { fill: #d8b083; }
 .data-label { fill: #9dded4; }
 .control-label { fill: #e7b98b; }
+.cpu-diagram path { marker-end: none; }
 .external-wire { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .address-wire { stroke: #b88e63; opacity: .68; }
 .data-wire { stroke: #729b96; opacity: .68; }
@@ -712,6 +713,7 @@ body { background: #101116; color: var(--text); }
 .clock-wire { fill: none; stroke: #a77b52; stroke-width: 2.5; opacity: .55; vector-effect: non-scaling-stroke; }
 .cpu-route, .decode-connection { fill: none; stroke: #65717d; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; opacity: .39; vector-effect: non-scaling-stroke; }
 .cpu-route.external-route { stroke: #729b96; opacity: .6; }
+.cpu-route.address-route { stroke: #b88e63; opacity: .68; }
 .cpu-route.signal-route { stroke: #9c805f; stroke-width: 2; stroke-dasharray: 6 8; opacity: .42; }
 .cpu-route.route-active, .clock-wire.route-active, .control-rail.route-active, .decode-connection.route-active {
   stroke: #9aeee2;
@@ -721,7 +723,7 @@ body { background: #101116; color: var(--text); }
   filter: drop-shadow(0 0 4px rgba(143, 241, 226, .55));
   animation: electric-current .72s linear infinite;
 }
-.cpu-route.signal-route.route-active, .cpu-route.external-route.route-active, .control-rail.route-active { stroke: #f0bc84; filter: drop-shadow(0 0 4px rgba(240, 188, 132, .45)); }
+.cpu-route.signal-route.route-active, .cpu-route.address-route.route-active, .control-rail.route-active { stroke: #f0bc84; filter: drop-shadow(0 0 4px rgba(240, 188, 132, .45)); }
 .cpu-component rect { fill: rgba(29, 35, 44, .98); stroke: #66717d; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
 .cpu-component-title { fill: #d7e0e6; font: 17px 'DM Sans', Arial, sans-serif; font-weight: 600; letter-spacing: .045em; }
 .cpu-component-value { fill: #f2bd8c; font: 29px 'DM Mono', monospace; font-weight: 500; }
@@ -852,4 +854,103 @@ body { background: #101116; color: var(--text); }
 @media (prefers-reduced-motion: reduce) {
   .cpu-route.route-active, .clock-wire.route-active, .control-rail.route-active, .decode-connection.route-active { animation: none; stroke-dasharray: none; }
   .simulator-light-tunnel .light-tunnel-canvas { opacity: .22; }
+}
+
+/* Keep the animated tunnel behind content without reserving page layout space. */
+html, body, #root { width: 100%; max-width: 100%; }
+body { min-width: 0; }
+.site-frame {
+  --page-gutter: clamp(12px, 2.3vw, 38px);
+  width: 100%;
+  min-width: 0;
+  padding-inline: var(--page-gutter);
+  isolation: isolate;
+}
+.landing-light-tunnel, .simulator-light-tunnel {
+  position: fixed !important;
+  z-index: 0;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  background: #0d1015;
+  opacity: .16;
+  pointer-events: none;
+}
+.landing-light-tunnel .light-tunnel-canvas, .simulator-light-tunnel .light-tunnel-canvas { opacity: .42; }
+.light-tunnel-fallback {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 48%, transparent 0 8%, rgba(226, 230, 238, .13) 8.1% 8.25%, transparent 8.4% 18%, rgba(226, 230, 238, .1) 18.1% 18.25%, transparent 18.4% 30%, rgba(226, 230, 238, .08) 30.1% 30.25%, transparent 30.4%),
+    radial-gradient(ellipse at center, rgba(45, 48, 60, .2), transparent 72%);
+}
+.landing-frame > :not(.landing-light-tunnel), .simulator-frame > :not(.simulator-light-tunnel) { position: relative; z-index: 1; }
+.landing-frame .about-hero::before { inset-inline: 0; }
+.landing-frame .topbar, .simulator-frame .topbar { position: sticky; top: 0; z-index: 20; }
+
+/* Wrap the header as space narrows instead of letting its tagline force overflow. */
+.topbar {
+  width: calc(100% + 2 * var(--page-gutter));
+  min-width: 0;
+  margin-inline: calc(-1 * var(--page-gutter));
+  padding-inline: var(--page-gutter);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 24px;
+}
+.brand { flex: 0 1 auto; min-width: 0; }
+.topbar nav {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px clamp(14px, 1.8vw, 28px);
+  padding-block: 8px;
+}
+.topbar nav a { white-space: normal; }
+.project-tag { flex: 0 1 270px; min-width: 0; white-space: normal; text-align: right; line-height: 1.4; }
+
+/* The SVG pans only inside its own frame on narrow screens; the document stays viewport-width. */
+.simulator-page, .circuit-section, .circuit-panel, .configuration-section,
+.instruction-config-panel, .instruction-editor, .loaded-program-panel,
+.trace-panel, .diagram-pan { min-width: 0; max-width: 100%; }
+.diagram-pan { width: 100%; overflow: auto; contain: inline-size; }
+.simulator-frame .cpu-diagram { width: 100%; min-width: 960px; max-width: none; }
+.circuit-panel { overflow: hidden; }
+.instruction-editor-row, .ram-editor-row, .trace-row { min-width: 0; }
+.loaded-listing-row > code:last-child { min-width: 0; overflow-wrap: anywhere; }
+.site-footer { min-width: 0; flex-wrap: wrap; }
+
+/* Give the circuit a little more horizontal room so each card keeps its type size. */
+.simulator-frame .cpu-diagram { min-width: 0; }
+@media (max-width: 1280px) {
+  .simulator-frame .cpu-diagram { min-width: 1500px; }
+}
+
+@media (max-width: 1050px) {
+  .topbar nav { flex: 1 0 100%; order: 3; justify-content: flex-start; }
+  .project-tag { flex-basis: min(48%, 340px); margin-left: auto; }
+}
+@media (max-width: 680px) {
+  .topbar { align-items: center; gap: 2px 10px; padding-block: 10px; }
+  .brand { font-size: 16px; letter-spacing: .08em; }
+  .brand-mark { flex: 0 0 36px; width: 36px; height: 36px; }
+  .project-tag { display: none; }
+  .topbar nav { flex: 1 0 100%; order: 3; justify-content: flex-start; gap: 5px 17px; padding: 5px 0 1px; }
+  .topbar nav a { font-size: 15px; line-height: 1.4; }
+  .simulator-frame .cpu-diagram { width: 100%; min-width: 1500px; }
+  .about-hero { min-height: auto; padding-top: 64px; }
+  .about-hero h1 { font-size: clamp(58px, 16vw, 76px); }
+  .about-hero .fuzzy-title-canvas { max-width: min(100%, 360px); }
+  .about-summary { grid-template-columns: minmax(0, 1fr); padding: 22px; gap: 20px; }
+}
+@media (max-width: 390px) {
+  .topbar nav { column-gap: 12px; }
+  .topbar nav a { font-size: 14px; }
+  .brand { font-size: 14px; }
 }

@@ -15,36 +15,56 @@ const initialRamDraft = (): DraftRam[] => DEMO_RAM_INITIAL.map((entry, index) =>
 const active = (state: CpuState, name: string) => state.activePaths.includes(name)
 
 function CpuDiagram({ state }: { state: CpuState }) {
+  const busX = 920
+  const component = {
+    ram: { x: 70, y: 350, w: 340, h: 290, right: 410 },
+    mar: { x: 500, y: 365, w: 250, h: 90, left: 500, right: 750, cy: 410 },
+    mdr: { x: 500, y: 510, w: 250, h: 90, left: 500, right: 750, cy: 555 },
+    alu: { x: 500, y: 680, w: 260, h: 130, left: 500, right: 760, cx: 630 },
+    z: { x: 500, y: 865, w: 260, h: 86, right: 760, cx: 630 },
+    pc: { x: 1070, y: 125, w: 290, h: 94, left: 1070, right: 1360, cy: 172 },
+    ir: { x: 1070, y: 370, w: 300, h: 90, left: 1070, right: 1370, cy: 415 },
+    a: { x: 1070, y: 555, w: 300, h: 90, left: 1070, right: 1370, cy: 600 },
+    b: { x: 1070, y: 695, w: 300, h: 90, left: 1070, right: 1370, cy: 740 },
+    out: { x: 1070, y: 865, w: 300, h: 86, left: 1070, right: 1370, cy: 908 },
+    cu: { x: 1430, y: 120, w: 330, h: 170, left: 1430, bottom: 290, cy: 205, right: 1760 },
+    clock: { x: 1450, y: 350, w: 300, h: 70, cx: 1600 },
+    flags: { x: 1450, y: 555, w: 260, h: 150, left: 1450 },
+    operands: { x: 1430, y: 780, w: 330, h: 200, left: 1430 },
+  }
+  type Point = { x: number; y: number }
+  const busRoute = (from: Point, to: Point) => `M${from.x} ${from.y} H${busX} V${to.y} H${to.x}`
+  const routeAroundOutput = (fromY: number, to: Point) => `M${component.operands.left} ${fromY} H1400 V1010 H${busX} V${to.y} H${to.x}`
   const paths: Record<string, string> = {
-    'pc-mar': 'M990 170 H810 V330 H720',
-    'pc-increment': 'M1110 219 V240 M1150 263 H1248 V170 H1230',
-    'mar-ram': 'M520 345 H430 V410 H360',
-    'ram-mdr': 'M360 555 H430 V545 H520',
-    'mdr-ram': 'M520 545 H430 V555 H360',
-    'mdr-ir': 'M720 545 H810 V415 H990',
-    'mdr-fields': 'M720 545 H810 V100 H1390 V120',
-    'ir-control': 'M1230 415 H1245 V145 H1260',
-    'a-operand1': 'M990 600 H810 V825 H1260',
-    'b-operand1': 'M990 740 H810 V825 H1260',
-    'a-operand2': 'M990 600 H810 V875 H1260',
-    'b-operand2': 'M990 740 H810 V875 H1260',
-    'mdr-operand1': 'M720 545 H810 V825 H1260',
-    'mdr-operand2': 'M720 545 H810 V875 H1260',
-    'source1-address-mar': 'M1260 898 H810 V350 H720',
-    'source2-address-mar': 'M1260 922 H810 V360 H720',
-    'operand1-alu': 'M1260 825 H810 V735 H740',
-    'operand2-alu': 'M1260 875 H810 V775 H740',
-    'alu-z': 'M620 810 V865',
-    'z-a': 'M740 908 H810 V600 H990',
-    'z-b': 'M740 908 H810 V740 H990',
-    'z-output': 'M740 908 H810 H990',
-    'z-mdr': 'M740 908 H810 V545 H720',
-    'destination-address-mar': 'M1260 946 H810 V370 H720',
-    'ram-read': 'M1520 280 H1580 V1008 H380 V620 H360',
-    'ram-write': 'M1520 280 H1580 V1008 H380 V620 H360',
-    'alu-flags': 'M740 785 H835 V640 H1270',
-    'clock-edge': 'M1380 290 V350',
-    'cu-control': 'M1520 260 H1550 V850 H1490',
+    'pc-mar': busRoute({ x: component.pc.left, y: component.pc.cy }, { x: component.mar.right, y: component.mar.cy }),
+    'pc-increment': `M1215 219 V240 M1305 263 H1400 V172 H${component.pc.right}`,
+    'mar-ram': `M${component.mar.left} ${component.mar.cy} H${component.ram.right}`,
+    'ram-mdr': `M${component.ram.right} ${component.mdr.cy} H${component.mdr.left}`,
+    'mdr-ram': `M${component.mdr.left} ${component.mdr.cy} H${component.ram.right}`,
+    'mdr-ir': busRoute({ x: component.mdr.right, y: component.mdr.cy }, { x: component.ir.left, y: component.ir.cy }),
+    'mdr-fields': `M${component.mdr.right} ${component.mdr.cy} H${busX} V320 H1400 V${component.cu.cy} H${component.cu.left}`,
+    'ir-control': `M${component.ir.right} ${component.ir.cy} H1400 V220 H${component.cu.left}`,
+    'a-operand1': busRoute({ x: component.a.left, y: component.a.cy }, { x: component.operands.left, y: 825 }),
+    'b-operand1': busRoute({ x: component.b.left, y: component.b.cy }, { x: component.operands.left, y: 825 }),
+    'a-operand2': busRoute({ x: component.a.left, y: component.a.cy }, { x: component.operands.left, y: 875 }),
+    'b-operand2': busRoute({ x: component.b.left, y: component.b.cy }, { x: component.operands.left, y: 875 }),
+    'mdr-operand1': busRoute({ x: component.mdr.right, y: component.mdr.cy }, { x: component.operands.left, y: 825 }),
+    'mdr-operand2': busRoute({ x: component.mdr.right, y: component.mdr.cy }, { x: component.operands.left, y: 875 }),
+    'source1-address-mar': routeAroundOutput(900, { x: component.mar.right, y: component.mar.cy }),
+    'source2-address-mar': routeAroundOutput(924, { x: component.mar.right, y: component.mar.cy }),
+    'operand1-alu': busRoute({ x: component.operands.left, y: 825 }, { x: component.alu.right, y: 735 }),
+    'operand2-alu': busRoute({ x: component.operands.left, y: 875 }, { x: component.alu.right, y: 775 }),
+    'alu-z': `M${component.alu.cx} 810 V${component.z.y}`,
+    'z-a': busRoute({ x: component.z.right, y: 908 }, { x: component.a.left, y: component.a.cy }),
+    'z-b': busRoute({ x: component.z.right, y: 908 }, { x: component.b.left, y: component.b.cy }),
+    'z-output': busRoute({ x: component.z.right, y: 908 }, { x: component.out.left, y: component.out.cy }),
+    'z-mdr': busRoute({ x: component.z.right, y: 908 }, { x: component.mdr.right, y: component.mdr.cy }),
+    'destination-address-mar': routeAroundOutput(948, { x: component.mar.right, y: component.mar.cy }),
+    'ram-read': 'M1500 290 H1415 V1035 H450 V620 H410',
+    'ram-write': 'M1500 290 H1415 V1035 H450 V620 H410',
+    'alu-flags': `M${component.alu.right} 785 H940 V660 H1420 V630 H${component.flags.x}`,
+    'clock-edge': `M${component.clock.cx} ${component.cu.bottom} V${component.clock.y}`,
+    'cu-control': `M${component.cu.right} 260 H1790 V880 H1760`,
   }
 
   const box = (title: string, value: number | string, x: number, y: number, w: number, h: number, subtitle = '', extraClass = '') => (
@@ -57,104 +77,99 @@ function CpuDiagram({ state }: { state: CpuState }) {
   )
   const sourceText = (source: CpuState['leftSource']) => source ? (source.kind === 'RAM' ? `RAM[${formatByte(source.address ?? 0)}]` : source.kind) : '—'
   const destinationText = state.destination ? (state.destination.kind === 'RAM' ? `RAM[${formatByte(state.destination.address ?? 0)}]` : state.destination.kind === 'OUT' ? 'OUT' : state.destination.kind) : '—'
-  const taps = [170, 240, 330, 350, 360, 380, 415, 545, 600, 735, 740, 775, 825, 875, 898, 908, 922, 946]
+  const taps = [172, 263, 410, 415, 555, 600, 630, 660, 735, 740, 775, 825, 875, 908]
 
   return <div className="diagram-pan" tabIndex={0} aria-label="Scrollable single-bus CPU diagram">
-    <svg className="cpu-diagram" viewBox="0 0 1600 1060" role="img" aria-label={`Single internal bus CPU. PC ${formatByte(state.pc)}, IR ${formatByte(state.ir)}, A ${formatByte(state.a)}, B ${formatByte(state.b)}, MAR ${formatByte(state.mar)}, MDR ${formatByte(state.mdr)}, output ${formatByte(state.output)}, Zero ${Number(state.zero)}, Negative ${Number(state.negative)}, Carry ${Number(state.carry)}, cycles ${state.cycles}. External RAM address, data, and control lines are separate.`}>
-      <defs>
-        <marker id="cpu-arrow-muted" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0 0 L9 4 L0 8 z" fill="#65717d" /></marker>
-        <marker id="cpu-arrow-live" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0 0 L9 4 L0 8 z" fill="#96e7dd" /></marker>
-        <marker id="cpu-arrow-address" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0 0 L9 4 L0 8 z" fill="#d6a36d" /></marker>
-        <marker id="cpu-arrow-control" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0 0 L9 4 L0 8 z" fill="#efbc86" /></marker>
-      </defs>
+    <svg className="cpu-diagram" viewBox="0 0 1840 1080" role="img" aria-label={`Single internal bus CPU. PC ${formatByte(state.pc)}, IR ${formatByte(state.ir)}, A ${formatByte(state.a)}, B ${formatByte(state.b)}, MAR ${formatByte(state.mar)}, MDR ${formatByte(state.mdr)}, output ${formatByte(state.output)}, Zero ${Number(state.zero)}, Negative ${Number(state.negative)}, Carry ${Number(state.carry)}, cycles ${state.cycles}. External RAM address, data, and control lines are separate.`}>
+      {/* Draw all routed wires before the cards so a route never runs over component text. */}
+      <path className="internal-bus" d={`M${busX} 80 V1010`} />
+      <text className="wire-label internal-label" x={busX} y="62" textAnchor="middle">SINGLE INTERNAL BUS · 8 BITS</text>
+      <text className="wire-label bus-caption" x={busX} y="1062" textAnchor="middle">One selected source drives the bus on each rising edge</text>
 
-      <path className="internal-bus" d="M810 100 V960" />
-      <text className="wire-label internal-label" x="810" y="78" textAnchor="middle">SINGLE INTERNAL BUS · 8 BITS</text>
-      <text className="wire-label bus-caption" x="810" y="1042" textAnchor="middle">One selected source drives the bus on each rising edge</text>
+      <text className="wire-label address-label external-port-label" x="455" y="397" textAnchor="middle">ADDRESS</text>
+      <text className="wire-label data-label external-port-label" x="455" y="542" textAnchor="middle">DATA</text>
+      <text className="wire-label control-label" x="430" y="648">READ / WRITE / WMFC</text>
+      <text className="wire-label control-label external-control-caption" x="920" y="1018" textAnchor="middle">EXTERNAL MEMORY CONTROL · READ / WRITE / WMFC</text>
+      <text className="wire-label control-label" x="1195" y="680" textAnchor="middle">FLAG UPDATE</text>
 
-      <path className="external-wire address-wire" d="M520 345 H430 V410 H360" markerEnd="url(#cpu-arrow-address)" />
-      <path className="external-wire data-wire" d="M360 555 H430 V545 H520" markerEnd="url(#cpu-arrow-muted)" />
-      <path className="external-wire control-wire" d="M1520 280 H1580 V1008 H380 V620 H360" markerEnd="url(#cpu-arrow-control)" />
-      <text className="wire-label address-label" x="435" y="438" textAnchor="middle">ADDRESS · 8 BIT</text>
-      <text className="wire-label data-label" x="435" y="520" textAnchor="middle">DATA · 8 BIT</text>
-      <text className="wire-label control-label" x="390" y="674">READ / WRITE / WMFC</text>
-      <text className="wire-label control-label external-control-caption" x="810" y="990" textAnchor="middle">EXTERNAL MEMORY CONTROL · READ / WRITE / WMFC</text>
-      <text className="wire-label control-label" x="1060" y="628" textAnchor="middle">FLAG UPDATE</text>
+      <path className="control-rail" d={paths['cu-control']} />
+      <path className="control-branch" d="M1790 385 H1750 M1790 630 H1710 M1790 850 H1760" />
+      {[260, 385, 630, 850].map((y) => <circle className="control-tap" key={y} cx="1790" cy={y} r="4" />)}
+      <text className="wire-label control-label" x="1777" y="570" textAnchor="end" transform="rotate(-90 1777 570)">CONTROL SIGNALS</text>
+      <path className={`clock-wire${active(state, 'clock-edge') ? ' route-active' : ''}`} d={paths['clock-edge']} />
 
-      <path className="control-rail" d="M1520 260 H1550 V880 H1230" markerEnd="url(#cpu-arrow-control)" />
-      <path className="control-branch" d="M1550 380 H1490 M1550 630 H1490 M1550 850 H1490" />
-      {[280, 380, 630, 850].map((y) => <circle className="control-tap" key={y} cx="1550" cy={y} r="4" />)}
-      <text className="wire-label control-label" x="1538" y="560" textAnchor="end" transform="rotate(-90 1538 560)">CONTROL SIGNALS</text>
-      <path className={`clock-wire${active(state, 'clock-edge') ? ' route-active' : ''}`} d={paths['clock-edge']} markerEnd={active(state, 'clock-edge') ? 'url(#cpu-arrow-control)' : 'url(#cpu-arrow-muted)'} />
-
-      {Object.entries(paths).filter(([name]) => !['clock-edge', 'cu-control'].includes(name)).map(([name, d]) => {
-        const isActive = active(state, name)
-        const external = ['mar-ram', 'ram-mdr', 'mdr-ram', 'ram-read', 'ram-write'].includes(name)
-        const signal = ['alu-flags', 'decode-control', 'ir-control', 'ram-read', 'ram-write'].includes(name)
-        return <path key={`${state.cycles}-${name}`} className={`cpu-route${external ? ' external-route' : ''}${signal ? ' signal-route' : ''}${isActive ? ' route-active' : ''}`} d={d} markerEnd={isActive ? (external ? 'url(#cpu-arrow-address)' : signal ? 'url(#cpu-arrow-control)' : 'url(#cpu-arrow-live)') : 'url(#cpu-arrow-muted)'} />
+      {Object.entries(paths).filter(([name]) => !['clock-edge', 'cu-control', 'ram-write', 'mdr-ram'].includes(name)).map(([name, d]) => {
+        const isActive = name === 'ram-read'
+          ? active(state, 'ram-read') || active(state, 'ram-write')
+          : name === 'ram-mdr'
+            ? active(state, 'ram-mdr') || active(state, 'mdr-ram')
+            : active(state, name)
+        const external = name === 'ram-mdr'
+        const address = name === 'mar-ram'
+        const signal = ['alu-flags', 'decode-control', 'ir-control', 'ram-read'].includes(name)
+        return <path key={`${state.cycles}-${name}`} className={`cpu-route${external ? ' external-route' : ''}${address ? ' address-route' : ''}${signal ? ' signal-route' : ''}${isActive ? ' route-active' : ''}`} d={d} />
       })}
-      <path className={`control-rail${active(state, 'cu-control') ? ' route-active' : ''}`} d={paths['cu-control']} markerEnd={active(state, 'cu-control') ? 'url(#cpu-arrow-control)' : 'url(#cpu-arrow-muted)'} />
-      {taps.map((y) => <circle className="bus-tap" key={y} cx="810" cy={y} r="5" />)}
+      <path className={`control-rail${active(state, 'cu-control') ? ' route-active' : ''}`} d={paths['cu-control']} />
+      {taps.map((y) => <circle className="bus-tap" key={y} cx={busX} cy={y} r="5" />)}
 
-      {box('PROGRAM COUNTER · PC', state.pc, 990, 125, 240, 94, 'NEXT BYTE')}
-      <g className="increment-box"><rect x="990" y="240" width="160" height="46" rx="8" /><text x="1008" y="269">INCREMENT +1</text></g>
-      {box('MEMORY ADDRESS · MAR', state.mar, 520, 300, 200, 90, 'RAM ADDRESS')}
-      {box('MEMORY DATA · MDR', state.mdr, 520, 500, 200, 90, 'BYTE BUFFER')}
+      {box('PROGRAM COUNTER · PC', state.pc, component.pc.x, component.pc.y, component.pc.w, component.pc.h, 'NEXT BYTE')}
+      <g className="increment-box"><rect x="1125" y="240" width="180" height="46" rx="8" /><text x="1143" y="269">INCREMENT +1</text></g>
+      {box('MEMORY ADDRESS · MAR', state.mar, component.mar.x, component.mar.y, component.mar.w, component.mar.h, 'RAM ADDRESS')}
+      {box('MEMORY DATA · MDR', state.mdr, component.mdr.x, component.mdr.y, component.mdr.w, component.mdr.h, 'BYTE BUFFER')}
 
       <g className="cpu-component ram-component">
-        <rect x="80" y="350" width="280" height="290" rx="14" />
-        <text className="cpu-component-title" x="102" y="385">MAIN MEMORY</text>
-        <text className="ram-capacity" x="102" y="427">RAM · 256 × 8</text>
-        <text className="cpu-component-value" x="102" y="478">{formatByte(state.memory[state.mar] ?? 0)}</text>
-        <text className="cpu-component-caption" x="102" y="507">RAM[{formatByte(state.mar)}] · selected</text>
-        <path className="ram-port" d="M360 410 H381 M360 555 H381 M360 620 H381" />
-        <text className="ram-port-label" x="102" y="574">A[7:0] · D[7:0] · R/W</text>
-        <text className="ram-port-label" x="102" y="604">program and data share RAM</text>
+        <rect x={component.ram.x} y={component.ram.y} width={component.ram.w} height={component.ram.h} rx="14" />
+        <text className="cpu-component-title" x="92" y="385">MAIN MEMORY</text>
+        <text className="ram-capacity" x="92" y="427">RAM · 256 × 8</text>
+        <text className="cpu-component-value" x="92" y="478">{formatByte(state.memory[state.mar] ?? 0)}</text>
+        <text className="cpu-component-caption" x="92" y="507">RAM[{formatByte(state.mar)}] · selected</text>
+        <text className="ram-port-label" x="92" y="574">A[7:0] · D[7:0] · R/W</text>
+        <text className="ram-port-label" x="92" y="604">program and data share RAM</text>
       </g>
 
-      {box('INSTRUCTION REGISTER · IR', state.ir, 990, 370, 240, 90, state.instructionName)}
-      {box('GENERAL REGISTER · A', state.a, 990, 555, 240, 90, '8-BIT')}
-      {box('GENERAL REGISTER · B', state.b, 990, 695, 240, 90, '8-BIT')}
+      {box('INSTRUCTION REGISTER · IR', state.ir, component.ir.x, component.ir.y, component.ir.w, component.ir.h, state.instructionName)}
+      {box('GENERAL REGISTER · A', state.a, component.a.x, component.a.y, component.a.w, component.a.h, '8-BIT')}
+      {box('GENERAL REGISTER · B', state.b, component.b.x, component.b.y, component.b.w, component.b.h, '8-BIT')}
 
       <g className={`cpu-component alu-component${active(state, 'alu-flags') ? ' active-alu' : ''}`}>
-        <rect x="500" y="680" width="240" height="130" rx="14" />
+        <rect x={component.alu.x} y={component.alu.y} width={component.alu.w} height={component.alu.h} rx="14" />
         <text className="cpu-component-title" x="520" y="710">ALU · 8-BIT</text>
         <text className="alu-op" x="520" y="750">{state.instructionName === '—' ? 'READY' : state.instructionName}</text>
         <text className="cpu-component-caption" x="520" y="782">A {formatByte(state.aluA)} · B {formatByte(state.aluB)}</text>
       </g>
-      {box('RESULT REGISTER · Z', state.zRegister, 500, 865, 240, 86, 'WRITEBACK')}
-      {box('OUTPUT REGISTER · OUT', state.output, 990, 865, 240, 86, 'RESULT')}
+      {box('RESULT REGISTER · Z', state.zRegister, component.z.x, component.z.y, component.z.w, component.z.h, 'WRITEBACK')}
+      {box('OUTPUT REGISTER · OUT', state.output, component.out.x, component.out.y, component.out.w, component.out.h, 'RESULT')}
 
       <g className="cpu-component control-component">
-        <rect x="1260" y="120" width="260" height="170" rx="14" />
-        <text className="cpu-component-title" x="1282" y="155">CONTROL UNIT</text>
-        <text className="control-op" x="1282" y="190">{state.instructionName}</text>
-        <text className="control-detail" x="1282" y="220">1 · {sourceText(state.leftSource)}</text>
-        <text className="control-detail" x="1282" y="242">2 · {sourceText(state.rightSource)}</text>
-        <text className="control-detail" x="1282" y="264">DEST · {destinationText}</text>
+        <rect x={component.cu.x} y={component.cu.y} width={component.cu.w} height={component.cu.h} rx="14" />
+        <text className="cpu-component-title" x="1452" y="155">CONTROL UNIT</text>
+        <text className="control-op" x="1452" y="190">{state.instructionName}</text>
+        <text className="control-detail" x="1452" y="220">1 · {sourceText(state.leftSource)}</text>
+        <text className="control-detail" x="1452" y="242">2 · {sourceText(state.rightSource)}</text>
+        <text className="control-detail" x="1452" y="264">DEST · {destinationText}</text>
       </g>
       <g className="cpu-component clock-component">
-        <rect x="1270" y="350" width="220" height="70" rx="12" />
-        <text className="cpu-component-title" x="1288" y="378">MANUAL CLOCK</text>
-        <text className="clock-readout" x="1288" y="404">RISING EDGE · {state.cycles.toString().padStart(3, '0')}</text>
+        <rect x={component.clock.x} y={component.clock.y} width={component.clock.w} height={component.clock.h} rx="12" />
+        <text className="cpu-component-title" x="1468" y="378">MANUAL CLOCK</text>
+        <text className="clock-readout" x="1468" y="404">RISING EDGE · {state.cycles.toString().padStart(3, '0')}</text>
       </g>
 
       <g className="cpu-component operand-component">
-        <rect x="1260" y="780" width="230" height="200" rx="14" />
-        <text className="cpu-component-title" x="1280" y="810">OPERAND / ADDRESS</text>
-        <text className="operand-value" x="1280" y="842">1 · {formatByte(state.operand1)}</text>
-        <text className="operand-value" x="1280" y="872">2 · {formatByte(state.operand2)}</text>
-        <text className="operand-address" x="1280" y="902">SRC 1 · {sourceText(state.leftSource)}</text>
-        <text className="operand-address" x="1280" y="928">SRC 2 · {sourceText(state.rightSource)}</text>
-        <text className="operand-address" x="1280" y="954">DEST · {destinationText}</text>
+        <rect x={component.operands.x} y={component.operands.y} width={component.operands.w} height={component.operands.h} rx="14" />
+        <text className="cpu-component-title" x="1452" y="810">OPERAND / ADDRESS</text>
+        <text className="operand-value" x="1452" y="842">1 · {formatByte(state.operand1)}</text>
+        <text className="operand-value" x="1452" y="872">2 · {formatByte(state.operand2)}</text>
+        <text className="operand-address" x="1452" y="902">SRC 1 · {sourceText(state.leftSource)}</text>
+        <text className="operand-address" x="1452" y="928">SRC 2 · {sourceText(state.rightSource)}</text>
+        <text className="operand-address" x="1452" y="954">DEST · {destinationText}</text>
       </g>
       <g className="cpu-component flag-component">
-        <rect x="1270" y="555" width="220" height="150" rx="14" />
-        <text className="cpu-component-title" x="1290" y="585">FLAGS</text>
-        <text className="flag-value" x="1290" y="624">Z · {Number(state.zero)}</text>
-        <text className="flag-value" x="1290" y="656">N · {Number(state.negative)}</text>
-        <text className="flag-value" x="1392" y="624">C · {Number(state.carry)}</text>
-        <text className="cpu-component-caption" x="1290" y="684">Zero · Negative · Carry</text>
+        <rect x={component.flags.x} y={component.flags.y} width={component.flags.w} height={component.flags.h} rx="14" />
+        <text className="cpu-component-title" x="1470" y="585">FLAGS</text>
+        <text className="flag-value" x="1470" y="624">Z · {Number(state.zero)}</text>
+        <text className="flag-value" x="1572" y="624">C · {Number(state.carry)}</text>
+        <text className="flag-value" x="1470" y="656">N · {Number(state.negative)}</text>
+        <text className="cpu-component-caption" x="1470" y="684">Zero · Negative · Carry</text>
       </g>
     </svg>
   </div>
@@ -237,7 +252,7 @@ export default function SimulatorPage() {
   const addRamRow = () => { setRamDraft((rows) => [...rows, { id: Math.max(0, ...rows.map((row) => row.id)) + 1, address: '', value: '' }]); markDirty() }
 
   return <div className="site-frame simulator-frame">
-    <LightTunnel className="circuit-light-tunnel" cableColor="#ffffff" pulseColor="#ffffff" cableCount={56} pulseDensity={0.28} flowDirection="inward" mouseInteraction={false} clickSurge={false} tunnelColor="#101116" tunnelOpacity={0} speed={0.055} pulseSpeed={1.4} pulseLength={0.2} pulseBlend={0.5} pulseWidth={0.7} thickness={0.22} rimWidth={0.12} waviness={0.22} sway={0.28} bend={0.3} glow={0.45} size={1} fadeNear={0.55} fadeFar={2} brightness={0.36} colorVariance={false} grain={false} intro lightMode={false} />
+    <LightTunnel className="simulator-light-tunnel" cableColor="#ffffff" pulseColor="#ffffff" cableCount={56} pulseDensity={0.2} flowDirection="inward" mouseInteraction={false} clickSurge={false} tunnelColor="#101116" tunnelOpacity={0} speed={0.045} pulseSpeed={1.2} pulseLength={0.18} pulseBlend={0.45} pulseWidth={0.65} thickness={0.18} rimWidth={0.1} waviness={0.18} sway={0.22} bend={0.25} glow={0.36} size={1} fadeNear={0.55} fadeFar={2} brightness={0.26} colorVariance={false} grain={false} intro lightMode={false} />
     <SiteHeader page="simulator" />
     <main className="simulator-page">
       <section className="circuit-section" id="circuit" aria-labelledby="circuit-title">

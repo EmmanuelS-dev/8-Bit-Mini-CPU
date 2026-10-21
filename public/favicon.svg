@@ -1,0 +1,9 @@
+<!-- CPU icon adapted from Lucide's cpu.svg (https://github.com/lucide-icons/lucide/blob/main/icons/cpu.svg), ISC License. See LUCIDE-LICENSE.txt. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="8-bit CPU">
+  <rect width="64" height="64" rx="15" fill="#10151c"/>
+  <g fill="none" stroke="#d6a477" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.5">
+    <rect x="17" y="17" width="30" height="30" rx="5"/>
+    <path d="M25 25h14v14H25zM25 8v9m14-9v9M25 47v9m14-9v9M8 25h9m-9 14h9m30-14h9m-9 14h9"/>
+  </g>
+  <path d="M29 29h6v6h-6z" fill="#9ee5d9"/>
+</svg>

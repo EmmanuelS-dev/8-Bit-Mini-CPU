@@ -38,4 +38,10 @@ See [documentation.md](documentation.md) for the architecture, instruction encod
 - `src/SimulatorPage.tsx` renders the circuit, configurable program, RAM initial values, loaded listing, and trace.
 - `src/AboutPage.tsx` contains the landing page and team list.
 - `src/LightTunnel.tsx` provides the flowing-lines background used on Home and Circuit.
+
+## GitHub Pages
+
+This repository is a project site deployed below `/8-Bit-Mini-CPU/`. Vite builds both HTML entry points into `dist/` with that base path. The workflow in `.github/workflows/pages.yml` builds the project and deploys the `dist` artifact on pushes to `main`; in repository settings, Pages must use **GitHub Actions** as its source.
+
+The local SVG favicon is adapted from Lucide's CPU icon ([upstream source](https://github.com/lucide-icons/lucide/blob/main/icons/cpu.svg)). Lucide's ISC license and copyright notice are included in `public/LUCIDE-LICENSE.txt`.
 - `src/styles.css` defines the site, circuit, responsive layout, and active SVG route effect.
